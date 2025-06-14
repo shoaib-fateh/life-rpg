@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import Particles from 'particles.js';
 import { db } from './firebase';
-import { collection, getDocs, addDoc, updateDoc, doc, setDoc, deleteDoc } from 'firebase/firestore';
+import { collection, getDocs, addDoc, updateDoc, doc, setDoc, deleteDoc, getDoc } from 'firebase/firestore';
 import { Bar } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
@@ -42,8 +42,36 @@ const App = () => {
     { id: 3, name: '1-Hour Break', desc: 'Take a 1-hour break', cost: 500 },
   ];
 
-  // Initialize Particles.js and Firebase data
+  // Initialize state from Firebase
   useEffect(() => {
+    const loadState = async () => {
+      const stateDoc = doc(db, 'gameState', 'playerState');
+      const docSnap = await getDoc(stateDoc);
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        setLevel(data.level || 1);
+        setXp(data.xp || 0);
+        setMaxXP(data.maxXP || 980);
+        setCoins(data.coins || 0);
+        setHp(data.hp || 100);
+        setMaxHp(data.maxHp || 100);
+        setMana(data.mana || 100);
+        setMaxMana(data.maxMana || 120);
+      } else {
+        await setDoc(stateDoc, {
+          level: 1,
+          xp: 0,
+          maxXP: 980,
+          coins: 0,
+          hp: 100,
+          maxHp: 100,
+          mana: 100,
+          maxMana: 120,
+        });
+      }
+    };
+    loadState();
+
     window.particlesJS('particles-js', {
       particles: {
         number: { value: 80, density: { enable: true, value_area: 800 } },
@@ -83,6 +111,21 @@ const App = () => {
     };
   }, []);
 
+  // Save state to Firebase
+  const saveState = async () => {
+    const stateDoc = doc(db, 'gameState', 'playerState');
+    await updateDoc(stateDoc, {
+      level,
+      xp,
+      maxXP,
+      coins,
+      hp,
+      maxHp,
+      mana,
+      maxMana,
+    });
+  };
+
   // Update UI in Firebase with document existence check
   const updateUI = async () => {
     await Promise.all(
@@ -102,6 +145,7 @@ const App = () => {
         }
       })
     );
+    await saveState(); // Save game state after updating quests
   };
 
   // Render Quests
