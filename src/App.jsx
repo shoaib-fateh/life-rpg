@@ -104,7 +104,7 @@ const App = () => {
 
     return ['daily', 'main'].map(type => (
       <div key={type}>
-        <h2 className="text-lg font-bold mb-2">{type === 'daily' ? 'کوئست‌های روزانه' : 'کوئست‌های اصلی'}</h2>
+        <h2 className="text-lg font-bold mb-2">{type === 'daily' ? 'Daily Quests' : 'Main Quests'}</h2>
         <ul className="space-y-2">
           {quests
             .filter(q => q.type === type)
@@ -264,8 +264,8 @@ const App = () => {
           <div className="flex justify-between items-center">
             <div>
               <h1 className="text-2xl font-bold text-purple-400">🧠 Life-RPG</h1>
-              <p>
-                سطح: <span>{level}</span> | سکه‌ها: <span>{coins}</span> | HP: <span>{hp}</span> | Mana: <span>{mana}</span>
+              <p className='text-sm text-gray-300 mt-1'>
+                Level <span>{level}</span> • <span>{coins} 🪙</span> • HP: <span>{hp}</span> • MA: <span>{mana}</span>
               </p>
               <div className="w-full bg-gray-700 h-2 rounded mt-2">
                 <div
@@ -289,7 +289,7 @@ const App = () => {
             onClick={() => openQuestForm('daily')}
             className="bg-purple-500 px-4 py-2 rounded mb-4 hover:bg-purple-400 transition"
           >
-            �[. . .] کوئست جدید
+            New Quest
           </button>
           {renderQuests()}
         </div>
