@@ -45,10 +45,14 @@ const App = () => {
   // Initialize state from Firebase
   useEffect(() => {
     const loadState = async () => {
-      const stateDoc = doc(db, 'gameState', 'playerState');
-      const docSnap = await getDoc(stateDoc);
-      if (docSnap.exists()) {
-        const data = docSnap.data();
+      const [stateDocSnap, questsSnapshot] = await Promise.all([
+        getDoc(doc(db, 'gameState', 'playerState')),
+        getDocs(collection(db, 'quests')),
+      ]);
+
+      // Load player state
+      if (stateDocSnap.exists()) {
+        const data = stateDocSnap.data();
         setLevel(data.level || 1);
         setXp(data.xp || 0);
         setMaxXP(data.maxXP || 980);
@@ -58,7 +62,7 @@ const App = () => {
         setMana(data.mana || 100);
         setMaxMana(data.maxMana || 120);
       } else {
-        await setDoc(stateDoc, {
+        await setDoc(doc(db, 'gameState', 'playerState'), {
           level: 1,
           xp: 0,
           maxXP: 980,
@@ -69,6 +73,13 @@ const App = () => {
           maxMana: 120,
         });
       }
+
+      // Load quests
+      const questsData = questsSnapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+      setQuests(questsData);
     };
     loadState();
 
@@ -90,19 +101,6 @@ const App = () => {
       retina_detect: true,
     });
 
-    // Initialize Firebase quests collection if it doesn't exist
-    const initializeQuests = async () => {
-      const questsCollection = collection(db, 'quests');
-      const querySnapshot = await getDocs(questsCollection);
-      if (querySnapshot.empty) {
-        await setDoc(doc(db, 'quests', 'initial'), { placeholder: true });
-        await deleteDoc(doc(db, 'quests', 'initial')); // Clean up placeholder
-      }
-      const questsData = await getDocs(questsCollection);
-      setQuests(questsData.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    };
-    initializeQuests();
-
     // Cleanup charts on unmount
     return () => {
       if (xpChartRef.current) xpChartRef.current.destroy();
@@ -111,73 +109,82 @@ const App = () => {
     };
   }, []);
 
-  // Save state to Firebase
-  const saveState = async () => {
-    const stateDoc = doc(db, 'gameState', 'playerState');
-    await updateDoc(stateDoc, {
-      level,
-      xp,
-      maxXP,
-      coins,
-      hp,
-      maxHp,
-      mana,
-      maxMana,
-    });
-  };
+  // Auto-update player state to Firebase
+  useEffect(() => {
+    const updatePlayerState = async () => {
+      try {
+        const stateDoc = doc(db, 'gameState', 'playerState');
+        await updateDoc(stateDoc, {
+          level,
+          xp,
+          maxXP,
+          coins,
+          hp,
+          maxHp,
+          mana,
+          maxMana,
+        });
+      } catch (error) {
+        console.error("خطا در آپدیت وضعیت بازیکن:", error);
+      }
+    };
+    updatePlayerState();
+  }, [level, xp, maxXP, coins, hp, maxHp, mana, maxMana]);
 
-  // Update UI in Firebase with document existence check
-  const updateUI = async () => {
-    try {
-      await Promise.all(
-        quests.map(async quest => {
-          const questDocRef = doc(db, 'quests', quest.id);
-          const questDocSnap = await getDoc(questDocRef);
-          if (questDocSnap.exists()) {
-            await updateDoc(questDocRef, {
-              name: quest.name,
-              description: quest.description,
-              difficulty: quest.difficulty,
-              type: quest.type,
-              done: quest.done,
-              subquests: quest.subquests || [],
-              priority: quest.priority,
-            });
-          } else {
-            await setDoc(questDocRef, {
-              name: quest.name,
-              description: quest.description,
-              difficulty: quest.difficulty,
-              type: quest.type,
-              done: quest.done,
-              subquests: quest.subquests || [],
-              priority: quest.priority,
-            });
-          }
-        })
-      );
-      await saveState();
-    } catch (error) {
-      console.error("خطا در آپدیت دیتابیس Firebase:", error);
-    }
-  };
+  // Auto-update quests to Firebase
+  useEffect(() => {
+    const updateQuests = async () => {
+      try {
+        await Promise.all(
+          quests.map(async (quest) => {
+            const questDocRef = doc(db, 'quests', quest.id);
+            const questSnap = await getDoc(questDocRef);
+            if (questSnap.exists()) {
+              await updateDoc(questDocRef, {
+                name: quest.name,
+                description: quest.description,
+                difficulty: quest.difficulty,
+                type: quest.type,
+                done: quest.done,
+                subquests: quest.subquests || [],
+                priority: quest.priority,
+              });
+            } else {
+              await setDoc(questDocRef, {
+                name: quest.name,
+                description: quest.description,
+                difficulty: quest.difficulty,
+                type: quest.type,
+                done: quest.done,
+                subquests: quest.subquests || [],
+                priority: quest.priority,
+              });
+            }
+          })
+        );
+      } catch (error) {
+        console.error("خطا در آپدیت کوئست‌ها:", error);
+      }
+    };
+    updateQuests();
+  }, [quests]);
 
   // Render Quests
   const renderQuests = () => {
-    const dailyQuests = quests.filter(q => q.type === 'daily');
+    const dailyQuests = quests.filter((q) => q.type === 'daily');
     if (dailyQuests.length > 5) {
       // In-app notification logic to be added later
       return;
     }
 
-    return ['daily', 'main'].map(type => (
+    return ['daily', 'main'].map((type) => (
       <div key={type}>
         <h2 className="text-lg font-bold mb-2">{type === 'daily' ? 'Daily Quests' : 'Main Quests'}</h2>
         <ul className="space-y-2">
           {quests
-            .filter(q => q.type === type)
+            .filter((q) => q.type === type)
             .sort((a, b) => a.priority - b.priority)
-            .map(q => (
+            .map((q) => (
               <li key={q.id} className={`quest-item ${q.done ? 'done' : ''}`}>
                 <div>
                   <div>
@@ -186,7 +193,7 @@ const App = () => {
                   <div className="text-gray-400 text-xs">{q.description || ''}</div>
                   {q.subquests?.length > 0 && (
                     <div className="subquests-list">
-                      {q.subquests.map(sq => (
+                      {q.subquests.map((sq) => (
                         <div key={sq.id} className={`subquest-item ${sq.done ? 'done' : ''}`}>
                           <div>
                             <strong>{sq.name}</strong> - {sq.description || ''}
@@ -221,8 +228,8 @@ const App = () => {
   };
 
   // Complete Quest
-  const completeQuest = async id => {
-    const quest = quests.find(q => q.id === id);
+  const completeQuest = async (id) => {
+    const quest = quests.find((q) => q.id === id);
     if (!quest || quest.done) return;
 
     let baseXP = quest.type === 'main' ? 1000 : 30;
@@ -254,8 +261,8 @@ const App = () => {
       newXp -= newMaxXP;
       newLevel += 1;
       newMaxXP = Math.floor(newMaxXP * 1.18);
-      setMaxHp(prev => Math.floor(prev * 1.10)); // 10% boost to max HP
-      setMaxMana(prev => Math.floor(prev * 1.10)); // 10% boost to max Mana
+      setMaxHp((prev) => Math.floor(prev * 1.10)); // 10% boost to max HP
+      setMaxMana((prev) => Math.floor(prev * 1.10)); // 10% boost to max Mana
     }
     setLevel(newLevel);
     setXp(newXp);
@@ -263,15 +270,14 @@ const App = () => {
     setCoins(coins + baseCoins);
     setHp(Math.max(0, hp - hpCost));
     setMana(Math.max(0, mana - manaCost));
-    setQuests(quests.map(q => (q.id === id ? { ...q, done: true } : q)));
-    await updateUI();
+    setQuests(quests.map((q) => (q.id === id ? { ...q, done: true } : q)));
   };
 
   // Complete Subquest
   const completeSubquest = async (parentId, subId) => {
-    const parent = quests.find(q => q.id === parentId);
+    const parent = quests.find((q) => q.id === parentId);
     if (!parent || !parent.subquests) return;
-    const sub = parent.subquests.find(sq => sq.id === subId);
+    const sub = parent.subquests.find((sq) => sq.id === subId);
     if (!sub || sub.done) return;
 
     if (mana < 5) {
@@ -282,18 +288,17 @@ const App = () => {
     setCoins(coins + 20);
     setMana(Math.max(0, mana - 5));
     setQuests(
-      quests.map(q =>
+      quests.map((q) =>
         q.id === parentId
-          ? { ...q, subquests: q.subquests.map(sq => (sq.id === subId ? { ...sq, done: true } : sq)) }
+          ? { ...q, subquests: q.subquests.map((sq) => (sq.id === subId ? { ...sq, done: true } : sq)) }
           : q
       )
     );
-    await updateUI();
   };
 
   // Open Quest Form
-  const openQuestForm = type => {
-    if (type === 'daily' && quests.filter(q => q.type === 'daily').length >= 5) {
+  const openQuestForm = (type) => {
+    if (type === 'daily' && quests.filter((q) => q.type === 'daily').length >= 5) {
       // In-app notification logic to be added later
       return;
     }
@@ -302,7 +307,7 @@ const App = () => {
   };
 
   // Open Subquest Form
-  const openSubquestForm = parentId => {
+  const openSubquestForm = (parentId) => {
     setCurrentSubquestParentId(parentId);
     setShowSubquestModal(true);
   };
@@ -313,7 +318,7 @@ const App = () => {
       // In-app notification logic to be added later
       return;
     }
-    const parent = quests.find(q => q.id === currentSubquestParentId);
+    const parent = quests.find((q) => q.id === currentSubquestParentId);
     if (!parent) return;
     const newSubquest = {
       id: Date.now().toString() + Math.random().toString(16).slice(2),
@@ -322,13 +327,12 @@ const App = () => {
       done: false,
     };
     setQuests(
-      quests.map(q =>
+      quests.map((q) =>
         q.id === currentSubquestParentId ? { ...q, subquests: [...(q.subquests || []), newSubquest] } : q
       )
     );
     setShowSubquestModal(false);
     setCurrentSubquestParentId(null);
-    await updateUI();
   };
 
   // Chart Data
@@ -375,7 +379,7 @@ const App = () => {
   const progressBarStyle = (value, max) => ({
     width: `${(value / max) * 100}%`,
     height: '20px',
-    backgroundColor: value === max ? '#00ff00' : (value < max * 0.3 ? '#ff0000' : '#ffff00'),
+    backgroundColor: value === max ? '#00ff00' : value < max * 0.3 ? '#ff0000' : '#ffff00',
     borderRadius: '5px',
     transition: 'width 0.3s ease-in-out',
   });
@@ -486,21 +490,27 @@ const App = () => {
               // In-app notification logic to be added later
               return;
             }
-            const maxPriority = quests.reduce((max, q) => (q.priority > max ? q.priority : max), 0);
-            const newQuest = {
-              id: Date.now().toString() + Math.random().toString(16).slice(2),
+            const newQuestRef = await addDoc(collection(db, 'quests'), {
               name,
               description,
               difficulty,
               type,
               done: false,
               subquests: [],
-              priority: maxPriority + 1,
+              priority: quests.reduce((max, q) => (q.priority > max ? q.priority : max), 0) + 1,
+            });
+            const newQuest = {
+              id: newQuestRef.id,
+              name,
+              description,
+              difficulty,
+              type,
+              done: false,
+              subquests: [],
+              priority: quests.reduce((max, q) => (q.priority > max ? q.priority : max), 0) + 1,
             };
-            await addDoc(collection(db, 'quests'), newQuest);
             setQuests([...quests, newQuest]);
             setShowQuestModal(false);
-            await updateUI();
           }}
         />
         <SubquestModal
@@ -513,8 +523,8 @@ const App = () => {
           onClose={() => setShowShopModal(false)}
           items={shopItems}
           coins={coins}
-          onBuy={async id => {
-            const item = shopItems.find(i => i.id === id);
+          onBuy={async (id) => {
+            const item = shopItems.find((i) => i.id === id);
             if (!item || coins < item.cost) {
               // In-app notification logic to be added later
               return;
@@ -522,7 +532,6 @@ const App = () => {
             setCoins(coins - item.cost);
             if (item.name.includes('HP')) setHp(Math.min(hp + 50, maxHp));
             if (item.name.includes('Mana')) setMana(Math.min(mana + 50, maxMana));
-            await updateUI();
           }}
         />
       </div>
