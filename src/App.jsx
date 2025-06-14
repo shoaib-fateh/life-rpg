@@ -32,6 +32,8 @@ const App = () => {
   const [showQuestModal, setShowQuestModal] = useState(false);
   const [showSubquestModal, setShowSubquestModal] = useState(false);
   const [showShopModal, setShowShopModal] = useState(false);
+  const [loading, setLoading] = useState(true); // وضعیت بارگذاری
+  const particlesContainerRef = useRef(null); // مرجع برای المنت particles-js
   const xpChartRef = useRef(null);
   const hpChartRef = useRef(null);
   const manaChartRef = useRef(null);
@@ -45,69 +47,73 @@ const App = () => {
   // Initialize state from Firebase
   useEffect(() => {
     const loadState = async () => {
-      const [stateDocSnap, questsSnapshot] = await Promise.all([
-        getDoc(doc(db, 'gameState', 'playerState')),
-        getDocs(collection(db, 'quests')),
-      ]);
+      try {
+        const [stateDocSnap, questsSnapshot] = await Promise.all([
+          getDoc(doc(db, 'gameState', 'playerState')),
+          getDocs(collection(db, 'quests')),
+        ]);
 
-      // Load player state
-      if (stateDocSnap.exists()) {
-        const data = stateDocSnap.data();
-        setLevel(data.level || 1);
-        setXp(data.xp || 0);
-        setMaxXP(data.maxXP || 980);
-        setCoins(data.coins || 0);
-        setHp(data.hp || 100);
-        setMaxHp(data.maxHp || 100);
-        setMana(data.mana || 100);
-        setMaxMana(data.maxMana || 120);
-      } else {
-        await setDoc(doc(db, 'gameState', 'playerState'), {
-          level: 1,
-          xp: 0,
-          maxXP: 980,
-          coins: 0,
-          hp: 100,
-          maxHp: 100,
-          mana: 100,
-          maxMana: 120,
-        });
+        // Load player state
+        if (stateDocSnap.exists()) {
+          const data = stateDocSnap.data();
+          setLevel(data.level || 1);
+          setXp(data.xp || 0);
+          setMaxXP(data.maxXP || 980);
+          setCoins(data.coins || 0);
+          setHp(data.hp || 100);
+          setMaxHp(data.maxHp || 100);
+          setMana(data.mana || 100);
+          setMaxMana(data.maxMana || 120);
+        } else {
+          await setDoc(doc(db, 'gameState', 'playerState'), {
+            level: 1,
+            xp: 0,
+            maxXP: 980,
+            coins: 0,
+            hp: 100,
+            maxHp: 100,
+            mana: 100,
+            maxMana: 120,
+          });
+        }
+
+        // Load quests
+        const questsData = questsSnapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }));
+        setQuests(questsData);
+      } catch (error) {
+        console.error("خطا در لود داده‌ها از دیتابیس:", error);
+      } finally {
+        setLoading(false); // بارگذاری کامل شده
       }
-
-      // Load quests
-      const questsData = questsSnapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
-      setQuests(questsData);
     };
     loadState();
-
-    window.particlesJS('particles-js', {
-      particles: {
-        number: { value: 80, density: { enable: true, value_area: 800 } },
-        color: { value: '#5a5af0' },
-        shape: { type: 'circle' },
-        opacity: { value: 0.5, random: true },
-        size: { value: 3, random: true },
-        line_linked: { enable: true, distance: 150, color: '#5a5af0', opacity: 0.4, width: 1 },
-        move: { enable: true, speed: 6, direction: 'none', random: false, straight: false, out_mode: 'out', bounce: false },
-      },
-      interactivity: {
-        detect_on: 'canvas',
-        events: { onhover: { enable: true, mode: 'repulse' }, onclick: { enable: true, mode: 'push' }, resize: true },
-        modes: { repulse: { distance: 200, duration: 0.4 }, push: { particles_nb: 4 } },
-      },
-      retina_detect: true,
-    });
-
-    // Cleanup charts on unmount
-    return () => {
-      if (xpChartRef.current) xpChartRef.current.destroy();
-      if (hpChartRef.current) hpChartRef.current.destroy();
-      if (manaChartRef.current) manaChartRef.current.destroy();
-    };
   }, []);
+
+  // Initialize particles.js after loading and when container is ready
+  useEffect(() => {
+    if (!loading && particlesContainerRef.current) {
+      window.particlesJS('particles-js', {
+        particles: {
+          number: { value: 80, density: { enable: true, value_area: 800 } },
+          color: { value: '#5a5af0' },
+          shape: { type: 'circle' },
+          opacity: { value: 0.5, random: true },
+          size: { value: 3, random: true },
+          line_linked: { enable: true, distance: 150, color: '#5a5af0', opacity: 0.4, width: 1 },
+          move: { enable: true, speed: 6, direction: 'none', random: false, straight: false, out_mode: 'out', bounce: false },
+        },
+        interactivity: {
+          detect_on: 'canvas',
+          events: { onhover: { enable: true, mode: 'repulse' }, onclick: { enable: true, mode: 'push' }, resize: true },
+          modes: { repulse: { distance: 200, duration: 0.4 }, push: { particles_nb: 4 } },
+        },
+        retina_detect: true,
+      });
+    }
+  }, [loading, particlesContainerRef]);
 
   // Auto-update player state to Firebase
   useEffect(() => {
@@ -128,8 +134,8 @@ const App = () => {
         console.error("خطا در آپدیت وضعیت بازیکن:", error);
       }
     };
-    updatePlayerState();
-  }, [level, xp, maxXP, coins, hp, maxHp, mana, maxMana]);
+    if (!loading) updatePlayerState(); // فقط وقتی بارگذاری کامل شده آپدیت کن
+  }, [level, xp, maxXP, coins, hp, maxHp, mana, maxMana, loading]);
 
   // Auto-update quests to Firebase
   useEffect(() => {
@@ -166,8 +172,8 @@ const App = () => {
         console.error("خطا در آپدیت کوئست‌ها:", error);
       }
     };
-    updateQuests();
-  }, [quests]);
+    if (!loading) updateQuests(); // فقط وقتی بارگذاری کامل شده آپدیت کن
+  }, [quests, loading]);
 
   // Render Quests
   const renderQuests = () => {
@@ -261,8 +267,8 @@ const App = () => {
       newXp -= newMaxXP;
       newLevel += 1;
       newMaxXP = Math.floor(newMaxXP * 1.18);
-      setMaxHp((prev) => Math.floor(prev * 1.10)); // 10% boost to max HP
-      setMaxMana((prev) => Math.floor(prev * 1.10)); // 10% boost to max Mana
+      setMaxHp((prev) => Math.floor(prev * 1.10));
+      setMaxMana((prev) => Math.floor(prev * 1.10));
     }
     setLevel(newLevel);
     setXp(newXp);
@@ -368,7 +374,7 @@ const App = () => {
       {
         label: 'Mana',
         data: [mana],
-        backgroundColor: ['#8a2be2'], // Purple color for Mana
+        backgroundColor: ['#8a2be2'],
         borderColor: ['#8a2be2'],
         borderWidth: 1,
       },
@@ -384,9 +390,13 @@ const App = () => {
     transition: 'width 0.3s ease-in-out',
   });
 
+  if (loading) {
+    return <div className="text-white text-center">در حال بارگذاری...</div>; // نمایش لودینگ تا تکمیل داده‌ها
+  }
+
   return (
     <div className="relative min-h-screen bg-gray-900 text-white font-sans overflow-hidden">
-      <div id="particles-js" className="absolute inset-0 z-0"></div>
+      <div ref={particlesContainerRef} id="particles-js" className="absolute inset-0 z-0"></div>
       <div className="container mx-auto p-4 max-w-2xl relative z-10">
         {/* Header */}
         <header className="backdrop-blur-md bg-white bg-opacity-10 rounded-lg p-4 mb-6 shadow-lg">
