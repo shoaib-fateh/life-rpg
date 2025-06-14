@@ -24,7 +24,7 @@ const App = () => {
   const [coins, setCoins] = useState(0);
   const [hp, setHp] = useState(100);
   const [maxHp, setMaxHp] = useState(100);
-  const [mana, setMana] = useState(100);
+  const [mana, setMana] = useState(120);
   const [maxMana, setMaxMana] = useState(120);
   const [quests, setQuests] = useState([]);
   const [currentQuestType, setCurrentQuestType] = useState('daily');
@@ -128,24 +128,38 @@ const App = () => {
 
   // Update UI in Firebase with document existence check
   const updateUI = async () => {
-    await Promise.all(
-      quests.map(async quest => {
-        const questDoc = doc(db, 'quests', quest.id);
-        const docSnap = await getDocs(collection(db, 'quests'));
-        if (docSnap.docs.some(d => d.id === quest.id)) {
-          await updateDoc(questDoc, {
-            name: quest.name,
-            description: quest.description,
-            difficulty: quest.difficulty,
-            type: quest.type,
-            done: quest.done,
-            subquests: quest.subquests,
-            priority: quest.priority,
-          });
-        }
-      })
-    );
-    await saveState(); // Save game state after updating quests
+    try {
+      await Promise.all(
+        quests.map(async quest => {
+          const questDocRef = doc(db, 'quests', quest.id);
+          const questDocSnap = await getDoc(questDocRef);
+          if (questDocSnap.exists()) {
+            await updateDoc(questDocRef, {
+              name: quest.name,
+              description: quest.description,
+              difficulty: quest.difficulty,
+              type: quest.type,
+              done: quest.done,
+              subquests: quest.subquests || [],
+              priority: quest.priority,
+            });
+          } else {
+            await setDoc(questDocRef, {
+              name: quest.name,
+              description: quest.description,
+              difficulty: quest.difficulty,
+              type: quest.type,
+              done: quest.done,
+              subquests: quest.subquests || [],
+              priority: quest.priority,
+            });
+          }
+        })
+      );
+      await saveState();
+    } catch (error) {
+      console.error("خطا در آپدیت دیتابیس Firebase:", error);
+    }
   };
 
   // Render Quests
@@ -293,6 +307,30 @@ const App = () => {
     setShowSubquestModal(true);
   };
 
+  // Subquest Modal Confirmation
+  const handleSubquestConfirm = async ({ name, description }) => {
+    if (!name) {
+      // In-app notification logic to be added later
+      return;
+    }
+    const parent = quests.find(q => q.id === currentSubquestParentId);
+    if (!parent) return;
+    const newSubquest = {
+      id: Date.now().toString() + Math.random().toString(16).slice(2),
+      name,
+      description,
+      done: false,
+    };
+    setQuests(
+      quests.map(q =>
+        q.id === currentSubquestParentId ? { ...q, subquests: [...(q.subquests || []), newSubquest] } : q
+      )
+    );
+    setShowSubquestModal(false);
+    setCurrentSubquestParentId(null);
+    await updateUI();
+  };
+
   // Chart Data
   const xpChartData = {
     labels: ['XP'],
@@ -350,7 +388,7 @@ const App = () => {
         <header className="backdrop-blur-md bg-white bg-opacity-10 rounded-lg p-4 mb-6 shadow-lg">
           <div className="flex justify-between items-center">
             <div>
-              <h1 className="text-2xl font-bold text-purple-400">🧠 Life-RPG</h1>
+              <h1 className="text-2xl font-bold text-purple-400">🧠 Void</h1>
               <p>
                 Level: {level} • 🪙{coins}
               </p>
@@ -468,28 +506,7 @@ const App = () => {
         <SubquestModal
           show={showSubquestModal}
           onClose={() => setShowSubquestModal(false)}
-          onConfirm={async ({ name, description }) => {
-            if (!name) {
-              // In-app notification logic to be added later
-              return;
-            }
-            const parent = quests.find(q => q.id === currentSubquestParentId);
-            if (!parent) return;
-            const newSubquest = {
-              id: Date.now().toString() + Math.random().toString(16).slice(2),
-              name,
-              description,
-              done: false,
-            };
-            setQuests(
-              quests.map(q =>
-                q.id === currentSubquestParentId ? { ...q, subquests: [...q.subquests, newSubquest] } : q
-              )
-            );
-            setShowSubquestModal(false);
-            setCurrentSubquestParentId(null);
-            await updateUI();
-          }}
+          onConfirm={handleSubquestConfirm}
         />
         <ShopModal
           show={showShopModal}
