@@ -13,6 +13,7 @@ import {
 import QuestModal from './QuestModal';
 import SubquestModal from './SubquestModal';
 import ShopModal from './ShopModal';
+import InventoryModal from './InventoryModal';
 
 // Register Chart.js components
 ChartJS.register(BarElement, CategoryScale, LinearScale, Tooltip);
@@ -32,8 +33,10 @@ const App = () => {
   const [showQuestModal, setShowQuestModal] = useState(false);
   const [showSubquestModal, setShowSubquestModal] = useState(false);
   const [showShopModal, setShowShopModal] = useState(false);
-  const [loading, setLoading] = useState(true); // وضعیت بارگذاری
-  const particlesContainerRef = useRef(null); // مرجع برای المنت particles-js
+  const [loading, setLoading] = useState(true);
+  const [showInventoryModal, setShowInventoryModal] = useState(false);
+  const [inventory, setInventory] = useState({});
+  const particlesContainerRef = useRef(null);
   const xpChartRef = useRef(null);
   const hpChartRef = useRef(null);
   const manaChartRef = useRef(null);
@@ -318,6 +321,22 @@ const App = () => {
     setShowSubquestModal(true);
   };
 
+  const applyItem = (id) => {
+    const item = inventory[id];
+    if (!item || item.count <= 0) return;
+
+    item.effect();
+    setInventory(prev => {
+      const newCount = prev[id].count - 1;
+      if (newCount <= 0) {
+        const newInventory = { ...prev };
+        delete newInventory[id];
+        return newInventory;
+      }
+      return { ...prev, [id]: { ...item, count: newCount } };
+    });
+  };
+
   // Subquest Modal Confirmation
   const handleSubquestConfirm = async ({ name, description }) => {
     if (!name) {
@@ -433,15 +452,17 @@ const App = () => {
                 ></div>
               </div>
             </div>
-            <button
-              onClick={() => setShowShopModal(level >= 8 ? () => setShowShopModal(true) : null)}
-              className={`bg-yellow-600 px-3 py-1 rounded text-sm hover:bg-yellow-500 transition ${
-                level < 8 ? 'opacity-50 cursor-not-allowed' : ''
-              }`}
-              disabled={level < 8}
-            >
-              🛒 Store
-            </button>
+            <div className="row gap-2">
+              <button onClick={() => setShowInventoryModal(true)} className="bg-blue-500 px-3 py-1 rounded text-sm hover:bg-blue-400 transition">Inventory</button>
+              <button
+                onClick={() => setShowShopModal(level >= 8 ? () => setShowShopModal(true) : null)}
+                className={`bg-yellow-600 px-3 py-1 rounded text-sm hover:bg-yellow-500 transition ${level < 8 ? 'opacity-50 cursor-not-allowed' : ''
+                  }`}
+                disabled={level < 8}
+              >
+                🛒 Store
+              </button>
+            </div>
           </div>
         </header>
 
@@ -544,6 +565,7 @@ const App = () => {
             if (item.name.includes('Mana')) setMana(Math.min(mana + 50, maxMana));
           }}
         />
+        <InventoryModal show={showInventoryModal} onClose={() => setShowInventoryModal(false)} inventory={inventory} applyItem={applyItem} />
       </div>
     </div>
   );
