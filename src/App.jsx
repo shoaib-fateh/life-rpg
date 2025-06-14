@@ -25,14 +25,16 @@ const App = () => {
   const [hp, setHp] = useState(100);
   const [maxHp, setMaxHp] = useState(100);
   const [mana, setMana] = useState(100);
-  const [maxMana, setMaxMana] = useState(100);
+  const [maxMana, setMaxMana] = useState(120);
   const [quests, setQuests] = useState([]);
   const [currentQuestType, setCurrentQuestType] = useState('daily');
   const [currentSubquestParentId, setCurrentSubquestParentId] = useState(null);
   const [showQuestModal, setShowQuestModal] = useState(false);
   const [showSubquestModal, setShowSubquestModal] = useState(false);
   const [showShopModal, setShowShopModal] = useState(false);
-  const chartRef = useRef(null);
+  const xpChartRef = useRef(null);
+  const hpChartRef = useRef(null);
+  const manaChartRef = useRef(null);
 
   const shopItems = [
     { id: 1, name: 'HP Potion', desc: 'Restores 50 HP', cost: 100 },
@@ -73,29 +75,32 @@ const App = () => {
     };
     initializeQuests();
 
-    // Cleanup chart on unmount
+    // Cleanup charts on unmount
     return () => {
-      if (chartRef.current) {
-        chartRef.current.destroy();
-        chartRef.current = null;
-      }
+      if (xpChartRef.current) xpChartRef.current.destroy();
+      if (hpChartRef.current) hpChartRef.current.destroy();
+      if (manaChartRef.current) manaChartRef.current.destroy();
     };
   }, []);
 
-  // Update UI in Firebase
+  // Update UI in Firebase with document existence check
   const updateUI = async () => {
     await Promise.all(
-      quests.map(quest =>
-        updateDoc(doc(db, 'quests', quest.id), {
-          name: quest.name,
-          description: quest.description,
-          difficulty: quest.difficulty,
-          type: quest.type,
-          done: quest.done,
-          subquests: quest.subquests,
-          priority: quest.priority,
-        })
-      )
+      quests.map(async quest => {
+        const questDoc = doc(db, 'quests', quest.id);
+        const docSnap = await getDocs(collection(db, 'quests'));
+        if (docSnap.docs.some(d => d.id === quest.id)) {
+          await updateDoc(questDoc, {
+            name: quest.name,
+            description: quest.description,
+            difficulty: quest.difficulty,
+            type: quest.type,
+            done: quest.done,
+            subquests: quest.subquests,
+            priority: quest.priority,
+          });
+        }
+      })
     );
   };
 
@@ -245,14 +250,40 @@ const App = () => {
   };
 
   // Chart Data
-  const chartData = {
-    labels: ['XP', 'HP', 'Mana'],
+  const xpChartData = {
+    labels: ['XP'],
     datasets: [
       {
-        label: 'Status',
-        data: [xp, hp, mana],
-        backgroundColor: ['#5a5af0', '#ff4d4d', '#4da8ff'],
-        borderColor: ['#5a5af0', '#ff4d4d', '#4da8ff'],
+        label: 'XP',
+        data: [xp],
+        backgroundColor: ['#5a5af0'],
+        borderColor: ['#5a5af0'],
+        borderWidth: 1,
+      },
+    ],
+  };
+
+  const hpChartData = {
+    labels: ['HP'],
+    datasets: [
+      {
+        label: 'HP',
+        data: [hp],
+        backgroundColor: ['#ff4d4d'],
+        borderColor: ['#ff4d4d'],
+        borderWidth: 1,
+      },
+    ],
+  };
+
+  const manaChartData = {
+    labels: ['Mana'],
+    datasets: [
+      {
+        label: 'Mana',
+        data: [mana],
+        backgroundColor: ['#8a2be2'], // Purple color for Mana
+        borderColor: ['#8a2be2'],
         borderWidth: 1,
       },
     ],
@@ -277,24 +308,32 @@ const App = () => {
             <div>
               <h1 className="text-2xl font-bold text-purple-400">🧠 Life-RPG</h1>
               <p>
-                Level: {level} • 🪙{coins} • HP: {hp}/{maxHp} • Mana: {mana}/{maxMana}
+                Level: {level} • 🪙{coins}
               </p>
+              <div className="flex space-x-4 mt-2">
+                <div>
+                  <span className="mr-2">HP</span>
+                  <div className="w-32 bg-gray-700 h-2 rounded overflow-hidden">
+                    <div
+                      className="bg-red-500 h-2 rounded transition-all duration-300"
+                      style={progressBarStyle(hp, maxHp)}
+                    ></div>
+                  </div>
+                </div>
+                <div>
+                  <span className="mr-2">MA</span>
+                  <div className="w-32 bg-gray-700 h-2 rounded overflow-hidden">
+                    <div
+                      className="bg-purple-700 h-2 rounded transition-all duration-300"
+                      style={progressBarStyle(mana, maxMana)}
+                    ></div>
+                  </div>
+                </div>
+              </div>
               <div className="w-full bg-gray-700 h-2 rounded mt-2 overflow-hidden">
                 <div
                   className="bg-purple-500 h-2 rounded transition-all duration-300"
                   style={progressBarStyle(xp, maxXP)}
-                ></div>
-              </div>
-              <div className="w-full bg-gray-700 h-2 rounded mt-2 overflow-hidden">
-                <div
-                  className="bg-red-500 h-2 rounded transition-all duration-300"
-                  style={progressBarStyle(hp, maxHp)}
-                ></div>
-              </div>
-              <div className="w-full bg-gray-700 h-2 rounded mt-2 overflow-hidden">
-                <div
-                  className="bg-blue-500 h-2 rounded transition-all duration-300"
-                  style={progressBarStyle(mana, maxMana)}
                 ></div>
               </div>
             </div>
@@ -321,18 +360,38 @@ const App = () => {
           {renderQuests()}
         </div>
 
-        {/* Chart */}
-        <div className="backdrop-blur-md bg-white bg-opacity-10 rounded-lg p-4 shadow-lg">
-          <Bar
-            ref={chartRef}
-            data={chartData}
-            options={{
-              scales: {
-                y: { beginAtZero: true, max: Math.max(maxXP, maxHp, maxMana) },
-              },
-              plugins: { legend: { display: false } },
-            }}
-          />
+        {/* Charts */}
+        <div className="backdrop-blur-md bg-white bg-opacity-10 rounded-lg p-4 shadow-lg flex space-x-4">
+          <div className="w-1/3">
+            <Bar
+              ref={xpChartRef}
+              data={xpChartData}
+              options={{
+                scales: { y: { beginAtZero: true, max: maxXP } },
+                plugins: { legend: { display: false } },
+              }}
+            />
+          </div>
+          <div className="w-1/3">
+            <Bar
+              ref={hpChartRef}
+              data={hpChartData}
+              options={{
+                scales: { y: { beginAtZero: true, max: maxHp } },
+                plugins: { legend: { display: false } },
+              }}
+            />
+          </div>
+          <div className="w-1/3">
+            <Bar
+              ref={manaChartRef}
+              data={manaChartData}
+              options={{
+                scales: { y: { beginAtZero: true, max: maxMana } },
+                plugins: { legend: { display: false } },
+              }}
+            />
+          </div>
         </div>
 
         {/* Modals */}
