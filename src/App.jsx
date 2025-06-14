@@ -1,8 +1,7 @@
-// src/App.jsx
 import { useState, useEffect, useRef } from 'react';
 import Particles from 'particles.js';
 import { db } from './firebase';
-import { collection, getDocs, addDoc, updateDoc, doc } from 'firebase/firestore';
+import { collection, getDocs, addDoc, updateDoc, doc, setDoc, deleteDoc } from 'firebase/firestore';
 import { Bar } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
@@ -21,25 +20,27 @@ ChartJS.register(BarElement, CategoryScale, LinearScale, Tooltip);
 const App = () => {
   const [level, setLevel] = useState(1);
   const [xp, setXp] = useState(0);
-  const [nextXP, setNextXP] = useState(560);
+  const [maxXP, setMaxXP] = useState(980);
   const [coins, setCoins] = useState(0);
   const [hp, setHp] = useState(100);
+  const [maxHp, setMaxHp] = useState(100);
   const [mana, setMana] = useState(100);
+  const [maxMana, setMaxMana] = useState(100);
   const [quests, setQuests] = useState([]);
   const [currentQuestType, setCurrentQuestType] = useState('daily');
   const [currentSubquestParentId, setCurrentSubquestParentId] = useState(null);
   const [showQuestModal, setShowQuestModal] = useState(false);
   const [showSubquestModal, setShowSubquestModal] = useState(false);
   const [showShopModal, setShowShopModal] = useState(false);
-  const chartRef = useRef(null); // Reference to store chart instance
+  const chartRef = useRef(null);
 
   const shopItems = [
-    { id: 1, name: 'معجون HP', desc: 'بازگرداندن 50 HP', cost: 100 },
-    { id: 2, name: 'معجون Mana', desc: 'بازگرداندن 50 Mana', cost: 100 },
-    { id: 3, name: 'استراحت ۱ ساعته', desc: 'یک ساعت استراحت', cost: 500 },
+    { id: 1, name: 'HP Potion', desc: 'Restores 50 HP', cost: 100 },
+    { id: 2, name: 'Mana Potion', desc: 'Restores 50 Mana', cost: 100 },
+    { id: 3, name: '1-Hour Break', desc: 'Take a 1-hour break', cost: 500 },
   ];
 
-  // Initialize Particles.js
+  // Initialize Particles.js and Firebase data
   useEffect(() => {
     window.particlesJS('particles-js', {
       particles: {
@@ -59,15 +60,20 @@ const App = () => {
       retina_detect: true,
     });
 
-    // Load quests from Firestore
-    const fetchQuests = async () => {
-      const querySnapshot = await getDocs(collection(db, 'quests'));
-      const questsData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setQuests(questsData);
+    // Initialize Firebase quests collection if it doesn't exist
+    const initializeQuests = async () => {
+      const questsCollection = collection(db, 'quests');
+      const querySnapshot = await getDocs(questsCollection);
+      if (querySnapshot.empty) {
+        await setDoc(doc(db, 'quests', 'initial'), { placeholder: true });
+        await deleteDoc(doc(db, 'quests', 'initial')); // Clean up placeholder
+      }
+      const questsData = await getDocs(questsCollection);
+      setQuests(questsData.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     };
-    fetchQuests();
+    initializeQuests();
 
-    // Cleanup chart on component unmount
+    // Cleanup chart on unmount
     return () => {
       if (chartRef.current) {
         chartRef.current.destroy();
@@ -76,9 +82,8 @@ const App = () => {
     };
   }, []);
 
-  // Update UI
+  // Update UI in Firebase
   const updateUI = async () => {
-    // Save to Firestore
     await Promise.all(
       quests.map(quest =>
         updateDoc(doc(db, 'quests', quest.id), {
@@ -98,7 +103,7 @@ const App = () => {
   const renderQuests = () => {
     const dailyQuests = quests.filter(q => q.type === 'daily');
     if (dailyQuests.length > 5) {
-      alert('حداکثر ۵ کوئست روزانه مجاز است.');
+      // In-app notification logic to be added later
       return;
     }
 
@@ -141,7 +146,7 @@ const App = () => {
                   )}
                   {!q.done && type === 'main' && (
                     <button onClick={() => openSubquestForm(q.id)} className="btn-small">
-                      +ساب‌کوئست
+                      +Subquest
                     </button>
                   )}
                 </div>
@@ -175,28 +180,26 @@ const App = () => {
     }
 
     if (hp < hpCost || mana < manaCost) {
-      alert('HP یا Mana کافی نیست!');
+      // In-app notification logic to be added later
       return;
     }
 
-    setXp(prev => {
-      let newXp = prev + baseXP;
-      let newLevel = level;
-      let newNextXP = nextXP;
-      while (newXp >= newNextXP) {
-        newXp -= newNextXP;
-        newLevel++;
-        newNextXP = Math.floor(newNextXP * 1.18);
-        setHp(prev => prev + 5); // Increase max HP per level
-        setMana(prev => prev + 5); // Increase max Mana per level
-      }
-      setLevel(newLevel);
-      setNextXP(newNextXP);
-      return newXp;
-    });
+    let newXp = xp + baseXP;
+    let newLevel = level;
+    let newMaxXP = maxXP;
+    while (newXp >= newMaxXP) {
+      newXp -= newMaxXP;
+      newLevel += 1;
+      newMaxXP = Math.floor(newMaxXP * 1.18);
+      setMaxHp(prev => Math.floor(prev * 1.10)); // 10% boost to max HP
+      setMaxMana(prev => Math.floor(prev * 1.10)); // 10% boost to max Mana
+    }
+    setLevel(newLevel);
+    setXp(newXp);
+    setMaxXP(newMaxXP);
     setCoins(coins + baseCoins);
-    setHp(hp - hpCost);
-    setMana(mana - manaCost);
+    setHp(Math.max(0, hp - hpCost));
+    setMana(Math.max(0, mana - manaCost));
     setQuests(quests.map(q => (q.id === id ? { ...q, done: true } : q)));
     await updateUI();
   };
@@ -209,12 +212,12 @@ const App = () => {
     if (!sub || sub.done) return;
 
     if (mana < 5) {
-      alert('Mana کافی نیست!');
+      // In-app notification logic to be added later
       return;
     }
 
     setCoins(coins + 20);
-    setMana(mana - 5);
+    setMana(Math.max(0, mana - 5));
     setQuests(
       quests.map(q =>
         q.id === parentId
@@ -228,7 +231,7 @@ const App = () => {
   // Open Quest Form
   const openQuestForm = type => {
     if (type === 'daily' && quests.filter(q => q.type === 'daily').length >= 5) {
-      alert('حداکثر ۵ کوئست روزانه مجاز است.');
+      // In-app notification logic to be added later
       return;
     }
     setCurrentQuestType(type);
@@ -246,7 +249,7 @@ const App = () => {
     labels: ['XP', 'HP', 'Mana'],
     datasets: [
       {
-        label: 'وضعیت',
+        label: 'Status',
         data: [xp, hp, mana],
         backgroundColor: ['#5a5af0', '#ff4d4d', '#4da8ff'],
         borderColor: ['#5a5af0', '#ff4d4d', '#4da8ff'],
@@ -254,6 +257,15 @@ const App = () => {
       },
     ],
   };
+
+  // Progress Bars
+  const progressBarStyle = (value, max) => ({
+    width: `${(value / max) * 100}%`,
+    height: '20px',
+    backgroundColor: value === max ? '#00ff00' : (value < max * 0.3 ? '#ff0000' : '#ffff00'),
+    borderRadius: '5px',
+    transition: 'width 0.3s ease-in-out',
+  });
 
   return (
     <div className="relative min-h-screen bg-gray-900 text-white font-sans overflow-hidden">
@@ -264,21 +276,36 @@ const App = () => {
           <div className="flex justify-between items-center">
             <div>
               <h1 className="text-2xl font-bold text-purple-400">🧠 Life-RPG</h1>
-              <p className='text-sm text-gray-300 mt-1'>
-                Level <span>{level}</span> • <span>{coins} 🪙</span> • HP: <span>{hp}</span> • MA: <span>{mana}</span>
+              <p>
+                Level: {level} • 🪙{coins} • HP: {hp}/{maxHp} • Mana: {mana}/{maxMana}
               </p>
-              <div className="w-full bg-gray-700 h-2 rounded mt-2">
+              <div className="w-full bg-gray-700 h-2 rounded mt-2 overflow-hidden">
                 <div
                   className="bg-purple-500 h-2 rounded transition-all duration-300"
-                  style={{ width: `${Math.min((xp / nextXP) * 100, 100)}%` }}
+                  style={progressBarStyle(xp, maxXP)}
+                ></div>
+              </div>
+              <div className="w-full bg-gray-700 h-2 rounded mt-2 overflow-hidden">
+                <div
+                  className="bg-red-500 h-2 rounded transition-all duration-300"
+                  style={progressBarStyle(hp, maxHp)}
+                ></div>
+              </div>
+              <div className="w-full bg-gray-700 h-2 rounded mt-2 overflow-hidden">
+                <div
+                  className="bg-blue-500 h-2 rounded transition-all duration-300"
+                  style={progressBarStyle(mana, maxMana)}
                 ></div>
               </div>
             </div>
             <button
-              onClick={() => setShowShopModal(true)}
-              className="bg-yellow-600 px-3 py-1 rounded text-sm hover:bg-yellow-500 transition"
+              onClick={() => setShowShopModal(level >= 8 ? () => setShowShopModal(true) : null)}
+              className={`bg-yellow-600 px-3 py-1 rounded text-sm hover:bg-yellow-500 transition ${
+                level < 8 ? 'opacity-50 cursor-not-allowed' : ''
+              }`}
+              disabled={level < 8}
             >
-              🛒 فروشگاه
+              🛒 Store
             </button>
           </div>
         </header>
@@ -289,7 +316,7 @@ const App = () => {
             onClick={() => openQuestForm('daily')}
             className="bg-purple-500 px-4 py-2 rounded mb-4 hover:bg-purple-400 transition"
           >
-            New Quest
+            ➕ New Quest
           </button>
           {renderQuests()}
         </div>
@@ -297,9 +324,12 @@ const App = () => {
         {/* Chart */}
         <div className="backdrop-blur-md bg-white bg-opacity-10 rounded-lg p-4 shadow-lg">
           <Bar
+            ref={chartRef}
             data={chartData}
             options={{
-              scales: { y: { beginAtZero: true, max: Math.max(nextXP, hp, mana) } },
+              scales: {
+                y: { beginAtZero: true, max: Math.max(maxXP, maxHp, maxMana) },
+              },
               plugins: { legend: { display: false } },
             }}
           />
@@ -312,10 +342,10 @@ const App = () => {
           type={currentQuestType}
           onConfirm={async ({ name, description, difficulty, type }) => {
             if (!name) {
-              alert('نام کوئست الزامی است.');
+              // In-app notification logic to be added later
               return;
             }
-            const maxPriority = quests.reduce((max, q) => q.priority > max ? q.priority : max, 0);
+            const maxPriority = quests.reduce((max, q) => (q.priority > max ? q.priority : max), 0);
             const newQuest = {
               id: Date.now().toString() + Math.random().toString(16).slice(2),
               name,
@@ -337,7 +367,7 @@ const App = () => {
           onClose={() => setShowSubquestModal(false)}
           onConfirm={async ({ name, description }) => {
             if (!name) {
-              alert('نام ساب‌کوئست الزامی است.');
+              // In-app notification logic to be added later
               return;
             }
             const parent = quests.find(q => q.id === currentSubquestParentId);
@@ -366,13 +396,12 @@ const App = () => {
           onBuy={async id => {
             const item = shopItems.find(i => i.id === id);
             if (!item || coins < item.cost) {
-              alert('سکه کافی نیست!');
+              // In-app notification logic to be added later
               return;
             }
             setCoins(coins - item.cost);
-            if (item.name.includes('HP')) setHp(Math.min(hp + 50, 100 + (level - 1) * 5));
-            if (item.name.includes('Mana')) setMana(Math.min(mana + 50, 100 + (level - 1) * 5));
-            alert(`خریداری شد: ${item.name}`);
+            if (item.name.includes('HP')) setHp(Math.min(hp + 50, maxHp));
+            if (item.name.includes('Mana')) setMana(Math.min(mana + 50, maxMana));
             await updateUI();
           }}
         />
