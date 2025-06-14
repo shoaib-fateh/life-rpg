@@ -1,11 +1,22 @@
-import { useState, useEffect } from 'react';
+// src/App.jsx
+import { useState, useEffect, useRef } from 'react';
 import Particles from 'particles.js';
 import { db } from './firebase';
 import { collection, getDocs, addDoc, updateDoc, doc } from 'firebase/firestore';
 import { Bar } from 'react-chartjs-2';
+import {
+  Chart as ChartJS,
+  BarElement,
+  CategoryScale,
+  LinearScale,
+  Tooltip,
+} from 'chart.js';
 import QuestModal from './QuestModal';
 import SubquestModal from './SubquestModal';
 import ShopModal from './ShopModal';
+
+// Register Chart.js components
+ChartJS.register(BarElement, CategoryScale, LinearScale, Tooltip);
 
 const App = () => {
   const [level, setLevel] = useState(1);
@@ -20,6 +31,7 @@ const App = () => {
   const [showQuestModal, setShowQuestModal] = useState(false);
   const [showSubquestModal, setShowSubquestModal] = useState(false);
   const [showShopModal, setShowShopModal] = useState(false);
+  const chartRef = useRef(null); // Reference to store chart instance
 
   const shopItems = [
     { id: 1, name: 'معجون HP', desc: 'بازگرداندن 50 HP', cost: 100 },
@@ -37,14 +49,14 @@ const App = () => {
         opacity: { value: 0.5, random: true },
         size: { value: 3, random: true },
         line_linked: { enable: true, distance: 150, color: '#5a5af0', opacity: 0.4, width: 1 },
-        move: { enable: true, speed: 6, direction: 'none', random: false, straight: false, out_mode: 'out', bounce: false }
+        move: { enable: true, speed: 6, direction: 'none', random: false, straight: false, out_mode: 'out', bounce: false },
       },
       interactivity: {
         detect_on: 'canvas',
         events: { onhover: { enable: true, mode: 'repulse' }, onclick: { enable: true, mode: 'push' }, resize: true },
-        modes: { repulse: { distance: 200, duration: 0.4 }, push: { particles_nb: 4 } }
+        modes: { repulse: { distance: 200, duration: 0.4 }, push: { particles_nb: 4 } },
       },
-      retina_detect: true
+      retina_detect: true,
     });
 
     // Load quests from Firestore
@@ -54,6 +66,14 @@ const App = () => {
       setQuests(questsData);
     };
     fetchQuests();
+
+    // Cleanup chart on component unmount
+    return () => {
+      if (chartRef.current) {
+        chartRef.current.destroy();
+        chartRef.current = null;
+      }
+    };
   }, []);
 
   // Update UI
@@ -167,6 +187,8 @@ const App = () => {
         newXp -= newNextXP;
         newLevel++;
         newNextXP = Math.floor(newNextXP * 1.18);
+        setHp(prev => prev + 5); // Increase max HP per level
+        setMana(prev => prev + 5); // Increase max Mana per level
       }
       setLevel(newLevel);
       setNextXP(newNextXP);
@@ -243,7 +265,7 @@ const App = () => {
             <div>
               <h1 className="text-2xl font-bold text-purple-400">🧠 Life-RPG</h1>
               <p>
-                سطح: <span>{level}</span> | سکه‌ها: <span>{coins}</span>
+                سطح: <span>{level}</span> | سکه‌ها: <span>{coins}</span> | HP: <span>{hp}</span> | Mana: <span>{mana}</span>
               </p>
               <div className="w-full bg-gray-700 h-2 rounded mt-2">
                 <div
@@ -267,14 +289,20 @@ const App = () => {
             onClick={() => openQuestForm('daily')}
             className="bg-purple-500 px-4 py-2 rounded mb-4 hover:bg-purple-400 transition"
           >
-            ➕ کوئست جدید
+            �[. . .] کوئست جدید
           </button>
           {renderQuests()}
         </div>
 
         {/* Chart */}
         <div className="backdrop-blur-md bg-white bg-opacity-10 rounded-lg p-4 shadow-lg">
-          <Bar data={chartData} options={{ scales: { y: { beginAtZero: true } }, plugins: { legend: { display: false } } }} />
+          <Bar
+            data={chartData}
+            options={{
+              scales: { y: { beginAtZero: true, max: Math.max(nextXP, hp, mana) } },
+              plugins: { legend: { display: false } },
+            }}
+          />
         </div>
 
         {/* Modals */}
@@ -342,8 +370,8 @@ const App = () => {
               return;
             }
             setCoins(coins - item.cost);
-            if (item.name.includes('HP')) setHp(Math.min(hp + 50, 100));
-            if (item.name.includes('Mana')) setMana(Math.min(mana + 50, 100));
+            if (item.name.includes('HP')) setHp(Math.min(hp + 50, 100 + (level - 1) * 5));
+            if (item.name.includes('Mana')) setMana(Math.min(mana + 50, 100 + (level - 1) * 5));
             alert(`خریداری شد: ${item.name}`);
             await updateUI();
           }}
