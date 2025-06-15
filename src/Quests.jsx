@@ -1,6 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 
 const Quests = ({ quests, openQuestForm, openSubquestForm, completeQuest, completeSubquest }) => {
+  const [activeTab, setActiveTab] = useState('Quests');
+
   const renderQuests = () => {
     const dailyQuests = quests.filter((q) => q.type === 'daily');
     if (dailyQuests.length > 5) {
@@ -58,15 +60,47 @@ const Quests = ({ quests, openQuestForm, openSubquestForm, completeQuest, comple
     ));
   };
 
+  const renderTabContent = () => {
+    switch (activeTab) {
+      case 'Quests':
+        return (
+          <>
+            <button
+              onClick={() => openQuestForm('daily')}
+              className="bg-purple-500 px-4 py-2 rounded mb-4 hover:bg-purple-400 transition"
+            >
+              ➕ New Quest
+            </button>
+            {renderQuests()}
+          </>
+        );
+      case 'Notification':
+        return <div className="p-4 text-gray-300">Notification content goes here.</div>;
+      case 'Achievements':
+        return <div className="p-4 text-gray-300">Achievements content goes here.</div>;
+      default:
+        return null;
+    }
+  };
+
   return (
-    <div className="backdrop-blur-md bg-white bg-opacity-10 rounded-lg p-4 mb-6 shadow-lg">
-      <button
-        onClick={() => openQuestForm('daily')}
-        className="bg-purple-500 px-4 py-2 rounded mb-4 hover:bg-purple-400 transition"
-      >
-        ➕ New Quest
-      </button>
-      {renderQuests()}
+    <div className="backdrop-blur-md bg-gray-800 bg-opacity-90 rounded-lg p-4 mb-6 shadow-lg">
+      <div className="flex space-x-4 mb-4 bg-gray-900 p-2 rounded-t-lg">
+        {['Notification', 'Quests', 'Achievements'].map((tab) => (
+          <button
+            key={tab}
+            onClick={() => setActiveTab(tab)}
+            className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${
+              activeTab === tab
+                ? 'bg-gray-700 text-white'
+                : 'text-gray-400 hover:text-gray-200'
+            }`}
+          >
+            {tab}
+          </button>
+        ))}
+      </div>
+      <div className="p-4 bg-gray-800 rounded-b-lg">{renderTabContent()}</div>
     </div>
   );
 };
