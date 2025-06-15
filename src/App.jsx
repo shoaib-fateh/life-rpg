@@ -2,21 +2,10 @@ import { useState, useEffect, useRef } from 'react';
 import Particles from 'particles.js';
 import { db } from './firebase';
 import { collection, getDocs, addDoc, updateDoc, doc, setDoc, deleteDoc, getDoc } from 'firebase/firestore';
-import { Bar } from 'react-chartjs-2';
-import {
-  Chart as ChartJS,
-  BarElement,
-  CategoryScale,
-  LinearScale,
-  Tooltip,
-} from 'chart.js';
-import QuestModal from './QuestModal';
-import SubquestModal from './SubquestModal';
-import ShopModal from './ShopModal';
-import InventoryModal from './InventoryModal';
-
-// Register Chart.js components
-ChartJS.register(BarElement, CategoryScale, LinearScale, Tooltip);
+import Header from './Header';
+import Quests from './Quests';
+import Charts from './Charts';
+import Modals from './Modals';
 
 const App = () => {
   const [level, setLevel] = useState(1);
@@ -37,9 +26,6 @@ const App = () => {
   const [showInventoryModal, setShowInventoryModal] = useState(false);
   const [inventory, setInventory] = useState({});
   const particlesContainerRef = useRef(null);
-  const xpChartRef = useRef(null);
-  const hpChartRef = useRef(null);
-  const manaChartRef = useRef(null);
 
   const shopItems = [
     { id: 1, name: 'HP Potion', desc: 'Restores 50 HP', cost: 100 },
@@ -89,7 +75,7 @@ const App = () => {
       } catch (error) {
         console.error("خطا در لود داده‌ها از دیتابیس:", error);
       } finally {
-        setLoading(false); // بارگذاری کامل شده
+        setLoading(false);
       }
     };
     loadState();
@@ -137,7 +123,7 @@ const App = () => {
         console.error("خطا در آپدیت وضعیت بازیکن:", error);
       }
     };
-    if (!loading) updatePlayerState(); // فقط وقتی بارگذاری کامل شده آپدیت کن
+    if (!loading) updatePlayerState();
   }, [level, xp, maxXP, coins, hp, maxHp, mana, maxMana, loading]);
 
   // Auto-update quests to Firebase
@@ -175,9 +161,10 @@ const App = () => {
         console.error("خطا در آپدیت کوئست‌ها:", error);
       }
     };
-    if (!loading) updateQuests(); // فقط وقتی بارگذاری کامل شده آپدیت کن
+    if (!loading) updateQuests();
   }, [quests, loading]);
 
+  // Auto-update inventory to Firebase
   useEffect(() => {
     const updateInventory = async () => {
       try {
@@ -211,63 +198,31 @@ const App = () => {
     if (!loading) updateInventory();
   }, [inventory, loading]);
 
-  // Render Quests
-  const renderQuests = () => {
-    const dailyQuests = quests.filter((q) => q.type === 'daily');
-    if (dailyQuests.length > 5) {
-      // In-app notification logic to be added later
-      return;
-    }
+  // Load inventory from Firebase
+  useEffect(() => {
+    const loadInventory = async () => {
+      const inventorySnapshot = await getDocs(collection(db, 'inventory'));
+      const data = {};
+      inventorySnapshot.forEach(docSnap => {
+        const raw = docSnap.data();
+        const id = docSnap.id;
 
-    return ['daily', 'main'].map((type) => (
-      <div key={type}>
-        <h2 className="text-lg font-bold mb-2">{type === 'daily' ? 'Daily Quests' : 'Main Quests'}</h2>
-        <ul className="space-y-2">
-          {quests
-            .filter((q) => q.type === type)
-            .sort((a, b) => a.priority - b.priority)
-            .map((q) => (
-              <li key={q.id} className={`quest-item ${q.done ? 'done' : ''}`}>
-                <div>
-                  <div>
-                    <strong>{q.name}</strong> [{q.difficulty}]
-                  </div>
-                  <div className="text-gray-400 text-xs">{q.description || ''}</div>
-                  {q.subquests?.length > 0 && (
-                    <div className="subquests-list">
-                      {q.subquests.map((sq) => (
-                        <div key={sq.id} className={`subquest-item ${sq.done ? 'done' : ''}`}>
-                          <div>
-                            <strong>{sq.name}</strong> - {sq.description || ''}
-                          </div>
-                          {!sq.done && (
-                            <button onClick={() => completeSubquest(q.id, sq.id)} className="btn-small">
-                              ✔
-                            </button>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                <div className="flex flex-col items-end space-y-1">
-                  {!q.done && (
-                    <button onClick={() => completeQuest(q.id)} className="btn-small">
-                      ✔
-                    </button>
-                  )}
-                  {!q.done && type === 'main' && (
-                    <button onClick={() => openSubquestForm(q.id)} className="btn-small">
-                      +Subquest
-                    </button>
-                  )}
-                </div>
-              </li>
-            ))}
-        </ul>
-      </div>
-    ));
-  };
+        let effectFn = () => { };
+        if (raw.name === 'HP Potion') {
+          effectFn = () => setHp(prev => Math.min(prev + 50, maxHp));
+        } else if (raw.name === 'Mana Potion') {
+          effectFn = () => setMana(prev => Math.min(prev + 50, maxMana));
+        } else if (raw.name === '1-Hour Break') {
+          effectFn = () => console.log("1-hour break used (implement logic here)");
+        }
+
+        data[id] = { ...raw, effect: effectFn };
+      });
+      setInventory(data);
+      setLoading(false);
+    };
+    loadInventory();
+  }, []);
 
   // Complete Quest
   const completeQuest = async (id) => {
@@ -354,44 +309,18 @@ const App = () => {
     setShowSubquestModal(true);
   };
 
-  useEffect(() => {
-    const loadInventory = async () => {
-      const inventorySnapshot = await getDocs(collection(db, 'inventory'));
-      const data = {};
-      inventorySnapshot.forEach(docSnap => {
-        const raw = docSnap.data();
-        const id = docSnap.id;
-
-        let effectFn = () => { };
-        if (raw.name === 'HP Potion') {
-          effectFn = () => setHp(prev => Math.min(prev + 50, maxHp));
-        } else if (raw.name === 'Mana Potion') {
-          effectFn = () => setMana(prev => Math.min(prev + 50, maxMana));
-        } else if (raw.name === '1-Hour Break') {
-          effectFn = () => console.log("1-hour break used (implement logic here)");
-        }
-
-        data[id] = { ...raw, effect: effectFn };
-      });
-      setInventory(data);
-      setLoading(false);
-    };
-    loadInventory();
-  }, []);
-
-
+  // Buy Item
   const buyItem = async (id) => {
     const item = shopItems.find(i => i.id === id);
     if (!item || coins < item.cost) return;
 
     setCoins(coins - item.cost);
 
-    const itemKey = `item_${item.id}`; // کلید ثابت بر اساس ID آیتم شاپ
+    const itemKey = `item_${item.id}`;
     const inventoryDocRef = doc(db, 'inventory', itemKey);
     const inventorySnap = await getDoc(inventoryDocRef);
 
     if (inventorySnap.exists()) {
-      // اگه آیتم وجود داره، تعداد رو افزایش بده
       const currentItem = inventory[itemKey] || { count: 0 };
       const newCount = currentItem.count + 1;
       const updatedItem = {
@@ -405,7 +334,6 @@ const App = () => {
       setInventory(prev => ({ ...prev, [itemKey]: updatedItem }));
       await updateDoc(inventoryDocRef, { count: newCount });
     } else {
-      // اگه آیتم جدیده، سند جدید بساز
       const newItem = {
         name: item.name,
         desc: item.desc,
@@ -415,26 +343,25 @@ const App = () => {
         effect: item.effect || (() => { })
       };
       const itemToSave = { ...newItem };
-      delete itemToSave.effect; // تابع effect رو ذخیره نکن
+      delete itemToSave.effect;
       setInventory(prev => ({ ...prev, [itemKey]: newItem }));
       await setDoc(inventoryDocRef, itemToSave);
     }
   };
 
+  // Apply Item
   const applyItem = async (id) => {
     const item = inventory[id];
     if (!item || item.count <= 0) return;
 
-    // اعمال اثر فیک
     if (item.name === 'HP Potion') {
       setHp(prev => Math.min(prev + 50, maxHp));
     } else if (item.name === 'Mana Potion') {
       setMana(prev => Math.min(prev + 50, maxMana));
     } else if (item.name === '1-Hour Break') {
-      setHp(prev => Math.min(prev + 20, maxHp)); // اثر فیک برای استراحت
+      setHp(prev => Math.min(prev + 20, maxHp));
     }
 
-    // کاهش تعداد
     const newCount = item.count - 1;
     const inventoryDocRef = doc(db, 'inventory', id);
     setInventory(prev => {
@@ -473,203 +400,84 @@ const App = () => {
     setCurrentSubquestParentId(null);
   };
 
-  // Chart Data
-  const xpChartData = {
-    labels: ['XP'],
-    datasets: [
-      {
-        label: 'XP',
-        data: [xp],
-        backgroundColor: ['#5a5af0'],
-        borderColor: ['#5a5af0'],
-        borderWidth: 1,
-      },
-    ],
-  };
-
-  const hpChartData = {
-    labels: ['HP'],
-    datasets: [
-      {
-        label: 'HP',
-        data: [hp],
-        backgroundColor: ['#ff4d4d'],
-        borderColor: ['#ff4d4d'],
-        borderWidth: 1,
-      },
-    ],
-  };
-
-  const manaChartData = {
-    labels: ['Mana'],
-    datasets: [
-      {
-        label: 'Mana',
-        data: [mana],
-        backgroundColor: ['#8a2be2'],
-        borderColor: ['#8a2be2'],
-        borderWidth: 1,
-      },
-    ],
-  };
-
-  // Progress Bars
-  const progressBarStyle = (value, max) => ({
-    width: `${(value / max) * 100}%`,
-    height: '20px',
-    backgroundColor: value === max ? '#00ff00' : value < max * 0.3 ? '#ff0000' : '#ffff00',
-    borderRadius: '5px',
-    transition: 'width 0.3s ease-in-out',
-  });
-
-  if (loading) {
-    return <div className="text-white text-center">در حال بارگذاری...</div>; // نمایش لودینگ تا تکمیل داده‌ها
-  }
-
   return (
     <div className="relative min-h-screen bg-gray-900 text-white font-sans overflow-hidden">
       <div ref={particlesContainerRef} id="particles-js" className="absolute inset-0 z-0"></div>
       <div className="container mx-auto p-4 max-w-2xl relative z-10">
-        {/* Header */}
-        <header className="backdrop-blur-md bg-white bg-opacity-10 rounded-lg p-4 mb-6 shadow-lg">
-          <div className="flex justify-between items-center">
-            <div>
-              <h1 className="text-2xl font-bold text-purple-400">🧠 Void</h1>
-              <p>
-                Level: {level} • 🪙{coins}
-              </p>
-              <div className="flex space-x-4 mt-2">
-                <div>
-                  <span className="mr-2">HP • <span className='text-sm text-gray-300'>{hp}/{maxHp}</span></span>
-                  <div className="w-32 bg-gray-700 h-2 rounded overflow-hidden">
-                    <div
-                      className="bg-red-500 h-2 rounded transition-all duration-300"
-                      style={progressBarStyle(hp, maxHp)}
-                    ></div>
-                  </div>
-                </div>
-                <div>
-                  <span className="mr-2">MA • <span className='text-sm text-gray-300'>{mana}/{maxMana}</span></span>
-                  <div className="w-32 bg-gray-700 h-2 rounded overflow-hidden">
-                    <div
-                      className="bg-purple-700 h-2 rounded transition-all duration-300"
-                      style={progressBarStyle(mana, maxMana)}
-                    ></div>
-                  </div>
-                </div>
-              </div>
-              <span className="mt-3">XP • <span className='text-sm text-gray-300'>{xp}/{maxXP}</span></span>
-              <div className="w-full bg-gray-700 h-2 rounded overflow-hidden">
-                <div
-                  className="!bg-purple-500 h-2 rounded transition-all duration-300"
-                  style={progressBarStyle(xp, maxXP)}
-                ></div>
-              </div>
-            </div>
-            <div className="flex flex-col space-y-2">
-              <button onClick={() => setShowInventoryModal(true)} className="bg-blue-500 px-3 py-1 rounded text-sm hover:bg-blue-400 transition">Inventory</button>
-              <button
-                onClick={() => setShowShopModal(level >= 8 ? () => setShowShopModal(true) : null)}
-                className={`bg-yellow-600 px-3 py-1 rounded text-sm hover:bg-yellow-500 transition ${level < 8 ? 'opacity-50 cursor-not-allowed' : ''}`}
-                disabled={level < 8}
-              >
-                🛒 Store
-              </button>
-            </div>
-          </div>
-        </header>
-
-        {/* Quests */}
-        <div className="backdrop-blur-md bg-white bg-opacity-10 rounded-lg p-4 mb-6 shadow-lg">
-          <button
-            onClick={() => openQuestForm('daily')}
-            className="bg-purple-500 px-4 py-2 rounded mb-4 hover:bg-purple-400 transition"
-          >
-            ➕ New Quest
-          </button>
-          {renderQuests()}
-        </div>
-
-        {/* Charts */}
-        <div className="backdrop-blur-md bg-white bg-opacity-10 rounded-lg p-4 shadow-lg flex space-x-4">
-          <div className="w-1/3">
-            <Bar
-              ref={xpChartRef}
-              data={xpChartData}
-              options={{
-                scales: { y: { beginAtZero: true, max: maxXP } },
-                plugins: { legend: { display: false } },
-              }}
+        {loading ? (
+          <div className="text-white text-center">در حال بارگذاری...</div>
+        ) : (
+          <>
+            <Header
+              level={level}
+              coins={coins}
+              hp={hp}
+              maxHp={maxHp}
+              mana={mana}
+              maxMana={maxMana}
+              xp={xp}
+              maxXP={maxXP}
+              setShowInventoryModal={setShowInventoryModal}
+              setShowShopModal={setShowShopModal}
             />
-          </div>
-          <div className="w-1/3">
-            <Bar
-              ref={hpChartRef}
-              data={hpChartData}
-              options={{
-                scales: { y: { beginAtZero: true, max: maxHp } },
-                plugins: { legend: { display: false } },
-              }}
+            <Quests
+              quests={quests}
+              openQuestForm={openQuestForm}
+              openSubquestForm={openSubquestForm}
+              completeQuest={completeQuest}
+              completeSubquest={completeSubquest}
             />
-          </div>
-          <div className="w-1/3">
-            <Bar
-              ref={manaChartRef}
-              data={manaChartData}
-              options={{
-                scales: { y: { beginAtZero: true, max: maxMana } },
-                plugins: { legend: { display: false } },
-              }}
+            <Charts
+              xp={xp}
+              maxXP={maxXP}
+              hp={hp}
+              maxHp={maxHp}
+              mana={mana}
+              maxMana={maxMana}
             />
-          </div>
-        </div>
-
-        {/* Modals */}
-        <QuestModal
-          show={showQuestModal}
-          onClose={() => setShowQuestModal(false)}
-          type={currentQuestType}
-          onConfirm={async ({ name, description, difficulty, type }) => {
-            if (!name) {
-              // In-app notification logic to be added later
-              return;
-            }
-            const newQuestRef = await addDoc(collection(db, 'quests'), {
-              name,
-              description,
-              difficulty,
-              type,
-              done: false,
-              subquests: [],
-              priority: quests.reduce((max, q) => (q.priority > max ? q.priority : max), 0) + 1,
-            });
-            const newQuest = {
-              id: newQuestRef.id,
-              name,
-              description,
-              difficulty,
-              type,
-              done: false,
-              subquests: [],
-              priority: quests.reduce((max, q) => (q.priority > max ? q.priority : max), 0) + 1,
-            };
-            setQuests([...quests, newQuest]);
-            setShowQuestModal(false);
-          }}
-        />
-        <SubquestModal
-          show={showSubquestModal}
-          onClose={() => setShowSubquestModal(false)}
-          onConfirm={handleSubquestConfirm}
-        />
-        <ShopModal
-          show={showShopModal}
-          onClose={() => setShowShopModal(false)}
-          items={shopItems}
-          coins={coins}
-          onBuy={buyItem}
-        />
-        <InventoryModal show={showInventoryModal} onClose={() => setShowInventoryModal(false)} inventory={inventory} applyItem={applyItem} />
+            <Modals
+              showQuestModal={showQuestModal}
+              setShowQuestModal={setShowQuestModal}
+              currentQuestType={currentQuestType}
+              onQuestConfirm={async ({ name, description, difficulty, type }) => {
+                if (!name) return;
+                const newQuestRef = await addDoc(collection(db, 'quests'), {
+                  name,
+                  description,
+                  difficulty,
+                  type,
+                  done: false,
+                  subquests: [],
+                  priority: quests.reduce((max, q) => (q.priority > max ? q.priority : max), 0) + 1,
+                });
+                const newQuest = {
+                  id: newQuestRef.id,
+                  name,
+                  description,
+                  difficulty,
+                  type,
+                  done: false,
+                  subquests: [],
+                  priority: quests.reduce((max, q) => (q.priority > max ? q.priority : max), 0) + 1,
+                };
+                setQuests([...quests, newQuest]);
+                setShowQuestModal(false);
+              }}
+              showSubquestModal={showSubquestModal}
+              setShowSubquestModal={setShowSubquestModal}
+              onSubquestConfirm={handleSubquestConfirm}
+              showShopModal={showShopModal}
+              setShowShopModal={setShowShopModal}
+              shopItems={shopItems}
+              coins={coins}
+              onBuy={buyItem}
+              showInventoryModal={showInventoryModal}
+              setShowInventoryModal={setShowInventoryModal}
+              inventory={inventory}
+              applyItem={applyItem}
+            />
+          </>
+        )}
       </div>
     </div>
   );
