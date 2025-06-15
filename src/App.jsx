@@ -178,6 +178,39 @@ const App = () => {
     if (!loading) updateQuests(); // فقط وقتی بارگذاری کامل شده آپدیت کن
   }, [quests, loading]);
 
+  useEffect(() => {
+    const updateInventory = async () => {
+      try {
+        await Promise.all(
+          Object.entries(inventory).map(async ([id, item]) => {
+            const inventoryDocRef = doc(db, 'inventory', id);
+            const inventorySnap = await getDoc(inventoryDocRef);
+            if (inventorySnap.exists()) {
+              await updateDoc(inventoryDocRef, {
+                name: item.name,
+                desc: item.desc,
+                count: item.count,
+                purchasedPrice: item.purchasedPrice,
+                timestamp: item.timestamp,
+              });
+            } else {
+              await setDoc(inventoryDocRef, {
+                name: item.name,
+                desc: item.desc,
+                count: item.count,
+                purchasedPrice: item.purchasedPrice,
+                timestamp: item.timestamp,
+              });
+            }
+          })
+        );
+      } catch (error) {
+        console.error("خطا در آپدیت انبار:", error);
+      }
+    };
+    if (!loading) updateInventory();
+  }, [inventory, loading]);
+
   // Render Quests
   const renderQuests = () => {
     const dailyQuests = quests.filter((q) => q.type === 'daily');
@@ -321,19 +354,99 @@ const App = () => {
     setShowSubquestModal(true);
   };
 
-  const applyItem = (id) => {
+  useEffect(() => {
+    const loadInventory = async () => {
+      const inventorySnapshot = await getDocs(collection(db, 'inventory'));
+      const data = {};
+      inventorySnapshot.forEach(docSnap => {
+        const raw = docSnap.data();
+        const id = docSnap.id;
+
+        let effectFn = () => { };
+        if (raw.name === 'HP Potion') {
+          effectFn = () => setHp(prev => Math.min(prev + 50, maxHp));
+        } else if (raw.name === 'Mana Potion') {
+          effectFn = () => setMana(prev => Math.min(prev + 50, maxMana));
+        } else if (raw.name === '1-Hour Break') {
+          effectFn = () => console.log("1-hour break used (implement logic here)");
+        }
+
+        data[id] = { ...raw, effect: effectFn };
+      });
+      setInventory(data);
+      setLoading(false);
+    };
+    loadInventory();
+  }, []);
+
+
+  const buyItem = async (id) => {
+    const item = shopItems.find(i => i.id === id);
+    if (!item || coins < item.cost) return;
+
+    setCoins(coins - item.cost);
+
+    const itemKey = `item_${item.id}`; // کلید ثابت بر اساس ID آیتم شاپ
+    const inventoryDocRef = doc(db, 'inventory', itemKey);
+    const inventorySnap = await getDoc(inventoryDocRef);
+
+    if (inventorySnap.exists()) {
+      // اگه آیتم وجود داره، تعداد رو افزایش بده
+      const currentItem = inventory[itemKey] || { count: 0 };
+      const newCount = currentItem.count + 1;
+      const updatedItem = {
+        name: item.name,
+        desc: item.desc,
+        count: newCount,
+        purchasedPrice: item.cost,
+        timestamp: Date.now(),
+        effect: item.effect || (() => { })
+      };
+      setInventory(prev => ({ ...prev, [itemKey]: updatedItem }));
+      await updateDoc(inventoryDocRef, { count: newCount });
+    } else {
+      // اگه آیتم جدیده، سند جدید بساز
+      const newItem = {
+        name: item.name,
+        desc: item.desc,
+        count: 1,
+        purchasedPrice: item.cost,
+        timestamp: Date.now(),
+        effect: item.effect || (() => { })
+      };
+      const itemToSave = { ...newItem };
+      delete itemToSave.effect; // تابع effect رو ذخیره نکن
+      setInventory(prev => ({ ...prev, [itemKey]: newItem }));
+      await setDoc(inventoryDocRef, itemToSave);
+    }
+  };
+
+  const applyItem = async (id) => {
     const item = inventory[id];
     if (!item || item.count <= 0) return;
 
-    item.effect();
+    // اعمال اثر فیک
+    if (item.name === 'HP Potion') {
+      setHp(prev => Math.min(prev + 50, maxHp));
+    } else if (item.name === 'Mana Potion') {
+      setMana(prev => Math.min(prev + 50, maxMana));
+    } else if (item.name === '1-Hour Break') {
+      setHp(prev => Math.min(prev + 20, maxHp)); // اثر فیک برای استراحت
+    }
+
+    // کاهش تعداد
+    const newCount = item.count - 1;
+    const inventoryDocRef = doc(db, 'inventory', id);
     setInventory(prev => {
-      const newCount = prev[id].count - 1;
+      const newInventory = { ...prev };
       if (newCount <= 0) {
-        const newInventory = { ...prev };
         delete newInventory[id];
-        return newInventory;
+        deleteDoc(inventoryDocRef);
+      } else {
+        newInventory[id] = { ...item, count: newCount };
+        updateDoc(inventoryDocRef, { count: newCount });
       }
-      return { ...prev, [id]: { ...item, count: newCount } };
+      return newInventory;
     });
   };
 
@@ -427,7 +540,7 @@ const App = () => {
               </p>
               <div className="flex space-x-4 mt-2">
                 <div>
-                  <span className="mr-2">HP</span>
+                  <span className="mr-2">HP • <span className='text-sm text-gray-300'>{hp}/{maxHp}</span></span>
                   <div className="w-32 bg-gray-700 h-2 rounded overflow-hidden">
                     <div
                       className="bg-red-500 h-2 rounded transition-all duration-300"
@@ -436,7 +549,7 @@ const App = () => {
                   </div>
                 </div>
                 <div>
-                  <span className="mr-2">MA</span>
+                  <span className="mr-2">MA • <span className='text-sm text-gray-300'>{mana}/{maxMana}</span></span>
                   <div className="w-32 bg-gray-700 h-2 rounded overflow-hidden">
                     <div
                       className="bg-purple-700 h-2 rounded transition-all duration-300"
@@ -445,19 +558,19 @@ const App = () => {
                   </div>
                 </div>
               </div>
-              <div className="w-full bg-gray-700 h-2 rounded mt-2 overflow-hidden">
+              <span className="mt-3">XP • <span className='text-sm text-gray-300'>{xp}/{maxXP}</span></span>
+              <div className="w-full bg-gray-700 h-2 rounded overflow-hidden">
                 <div
-                  className="bg-purple-500 h-2 rounded transition-all duration-300"
+                  className="!bg-purple-500 h-2 rounded transition-all duration-300"
                   style={progressBarStyle(xp, maxXP)}
                 ></div>
               </div>
             </div>
-            <div className="row gap-2">
+            <div className="flex flex-col space-y-2">
               <button onClick={() => setShowInventoryModal(true)} className="bg-blue-500 px-3 py-1 rounded text-sm hover:bg-blue-400 transition">Inventory</button>
               <button
                 onClick={() => setShowShopModal(level >= 8 ? () => setShowShopModal(true) : null)}
-                className={`bg-yellow-600 px-3 py-1 rounded text-sm hover:bg-yellow-500 transition ${level < 8 ? 'opacity-50 cursor-not-allowed' : ''
-                  }`}
+                className={`bg-yellow-600 px-3 py-1 rounded text-sm hover:bg-yellow-500 transition ${level < 8 ? 'opacity-50 cursor-not-allowed' : ''}`}
                 disabled={level < 8}
               >
                 🛒 Store
@@ -554,16 +667,7 @@ const App = () => {
           onClose={() => setShowShopModal(false)}
           items={shopItems}
           coins={coins}
-          onBuy={async (id) => {
-            const item = shopItems.find((i) => i.id === id);
-            if (!item || coins < item.cost) {
-              // In-app notification logic to be added later
-              return;
-            }
-            setCoins(coins - item.cost);
-            if (item.name.includes('HP')) setHp(Math.min(hp + 50, maxHp));
-            if (item.name.includes('Mana')) setMana(Math.min(mana + 50, maxMana));
-          }}
+          onBuy={buyItem}
         />
         <InventoryModal show={showInventoryModal} onClose={() => setShowInventoryModal(false)} inventory={inventory} applyItem={applyItem} />
       </div>
