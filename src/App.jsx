@@ -16,7 +16,7 @@ const App = () => {
   const [maxHp, setMaxHp] = useState(100);
   const [mana, setMana] = useState(120);
   const [maxMana, setMaxMana] = useState(120);
-  const [quests, setQuests] = useState([]);
+  const [quests, setQuests] = useState([]); // همیشه با آرایه خالی شروع می‌شود
   const [currentQuestType, setCurrentQuestType] = useState('daily');
   const [currentSubquestParentId, setCurrentSubquestParentId] = useState(null);
   const [showQuestModal, setShowQuestModal] = useState(false);
@@ -70,6 +70,10 @@ const App = () => {
         const questsData = questsSnapshot.docs.map((doc) => ({
           id: doc.id,
           ...doc.data(),
+          status: doc.data().status || 'not_started',
+          dependencies: doc.data().dependencies || [],
+          deadline: doc.data().deadline || null,
+          subquests: doc.data().subquests || [],
         }));
         setQuests(questsData);
       } catch (error) {
@@ -80,6 +84,27 @@ const App = () => {
     };
     loadState();
   }, []);
+
+  // Check quest deadlines
+  useEffect(() => {
+    const checkDeadlines = () => {
+      const now = new Date().toISOString();
+      let hasChanges = false;
+      const updatedQuests = quests.map((q) => {
+        if (q.deadline && q.deadline < now && q.status !== 'completed') {
+          hasChanges = true;
+          return { ...q, status: 'failed' };
+        }
+        return q;
+      });
+      if (hasChanges) {
+        setQuests(updatedQuests);
+      }
+    };
+    const interval = setInterval(checkDeadlines, 60000); // Check every minute
+    checkDeadlines();
+    return () => clearInterval(interval);
+  }, [quests]);
 
   // Initialize particles.js after loading and when container is ready
   useEffect(() => {
@@ -140,9 +165,12 @@ const App = () => {
                 description: quest.description,
                 difficulty: quest.difficulty,
                 type: quest.type,
-                done: quest.done,
+                status: quest.status,
                 subquests: quest.subquests || [],
                 priority: quest.priority,
+                deadline: quest.deadline || null,
+                dependencies: quest.dependencies || [],
+                repeatable: quest.repeatable || false,
               });
             } else {
               await setDoc(questDocRef, {
@@ -150,9 +178,12 @@ const App = () => {
                 description: quest.description,
                 difficulty: quest.difficulty,
                 type: quest.type,
-                done: quest.done,
+                status: quest.status,
                 subquests: quest.subquests || [],
                 priority: quest.priority,
+                deadline: quest.deadline || null,
+                dependencies: quest.dependencies || [],
+                repeatable: quest.repeatable || false,
               });
             }
           })
@@ -224,14 +255,23 @@ const App = () => {
     loadInventory();
   }, []);
 
+  // Check if quest can be started based on dependencies
+  const canStartQuest = (quest) => {
+    if (!quest.dependencies || quest.dependencies.length === 0) return true;
+    return quest.dependencies.every((depId) => {
+      const depQuest = quests.find((q) => q.id === depId);
+      return depQuest && depQuest.status === 'completed';
+    });
+  };
+
   // Complete Quest
   const completeQuest = async (id) => {
     const quest = quests.find((q) => q.id === id);
-    if (!quest || quest.done) return;
+    if (!quest || quest.status === 'completed' || quest.status === 'failed' || !canStartQuest(quest)) return;
 
-    let baseXP = quest.type === 'main' ? 1000 : 30;
-    let baseCoins = quest.type === 'main' ? 500 : 50;
-    let hpCost = quest.type === 'main' ? 20 : 5;
+    let baseXP = quest.type === 'main' ? 1000 : quest.type === 'challenge' ? 1500 : 30;
+    let baseCoins = quest.type === 'main' ? 500 : quest.type === 'challenge' ? 750 : 50;
+    let hpCost = quest.type === 'main' ? 20 : quest.type === 'challenge' ? 30 : 5;
     let manaCost = quest.difficulty === 'hard' ? 15 : 5;
     if (quest.difficulty === 'medium') {
       baseXP *= 1.1;
@@ -247,7 +287,7 @@ const App = () => {
     }
 
     if (hp < hpCost || mana < manaCost) {
-      // In-app notification logic to be added later
+      console.log("منابع کافی نیست (HP یا Mana)");
       return;
     }
 
@@ -267,7 +307,19 @@ const App = () => {
     setCoins(coins + baseCoins);
     setHp(Math.max(0, hp - hpCost));
     setMana(Math.max(0, mana - manaCost));
-    setQuests(quests.map((q) => (q.id === id ? { ...q, done: true } : q)));
+
+    if (quest.type === 'repeatable') {
+      setQuests(quests.map((q) => (q.id === id ? { ...q, status: 'not_started' } : q)));
+    } else {
+      setQuests(quests.map((q) => (q.id === id ? { ...q, status: 'completed' } : q)));
+    }
+  };
+
+  // Start Quest
+  const startQuest = async (id) => {
+    const quest = quests.find((q) => q.id === id);
+    if (!quest || quest.status !== 'not_started' || !canStartQuest(quest)) return;
+    setQuests(quests.map((q) => (q.id === id ? { ...q, status: 'in_progress' } : q)));
   };
 
   // Complete Subquest
@@ -278,7 +330,7 @@ const App = () => {
     if (!sub || sub.done) return;
 
     if (mana < 5) {
-      // In-app notification logic to be added later
+      console.log("منابع کافی نیست (Mana)");
       return;
     }
 
@@ -295,8 +347,9 @@ const App = () => {
 
   // Open Quest Form
   const openQuestForm = (type) => {
+    console.log("Opening quest form with type:", type);
     if (type === 'daily' && quests.filter((q) => q.type === 'daily').length >= 5) {
-      // In-app notification logic to be added later
+      console.log("محدودیت تعداد کوئست‌های روزانه (حداکثر ۵)");
       return;
     }
     setCurrentQuestType(type);
@@ -305,6 +358,7 @@ const App = () => {
 
   // Open Subquest Form
   const openSubquestForm = (parentId) => {
+    console.log("Opening subquest form for parentId:", parentId);
     setCurrentSubquestParentId(parentId);
     setShowSubquestModal(true);
   };
@@ -312,7 +366,10 @@ const App = () => {
   // Buy Item
   const buyItem = async (id) => {
     const item = shopItems.find(i => i.id === id);
-    if (!item || coins < item.cost) return;
+    if (!item || coins < item.cost) {
+      console.log("منابع کافی نیست یا آیتم یافت نشد");
+      return;
+    }
 
     setCoins(coins - item.cost);
 
@@ -352,7 +409,10 @@ const App = () => {
   // Apply Item
   const applyItem = async (id) => {
     const item = inventory[id];
-    if (!item || item.count <= 0) return;
+    if (!item || item.count <= 0) {
+      console.log("آیتم موجود نیست یا تعداد کافی نیست");
+      return;
+    }
 
     if (item.name === 'HP Potion') {
       setHp(prev => Math.min(prev + 50, maxHp));
@@ -380,11 +440,14 @@ const App = () => {
   // Subquest Modal Confirmation
   const handleSubquestConfirm = async ({ name, description }) => {
     if (!name) {
-      // In-app notification logic to be added later
+      console.log("نام ساب‌کوئست وارد نشده است");
       return;
     }
     const parent = quests.find((q) => q.id === currentSubquestParentId);
-    if (!parent) return;
+    if (!parent) {
+      console.log("کوئست والد یافت نشد");
+      return;
+    }
     const newSubquest = {
       id: Date.now().toString() + Math.random().toString(16).slice(2),
       name,
@@ -426,6 +489,7 @@ const App = () => {
               openSubquestForm={openSubquestForm}
               completeQuest={completeQuest}
               completeSubquest={completeSubquest}
+              startQuest={startQuest}
             />
             <Charts
               xp={xp}
@@ -439,16 +503,22 @@ const App = () => {
               showQuestModal={showQuestModal}
               setShowQuestModal={setShowQuestModal}
               currentQuestType={currentQuestType}
-              onQuestConfirm={async ({ name, description, difficulty, type }) => {
-                if (!name) return;
+              onQuestConfirm={async ({ name, description, difficulty, type, deadline, dependencies }) => {
+                if (!name) {
+                  console.log("نام کوئست وارد نشده است");
+                  return;
+                }
                 const newQuestRef = await addDoc(collection(db, 'quests'), {
                   name,
                   description,
                   difficulty,
                   type,
-                  done: false,
+                  status: 'not_started',
                   subquests: [],
                   priority: quests.reduce((max, q) => (q.priority > max ? q.priority : max), 0) + 1,
+                  deadline: deadline || null,
+                  dependencies: dependencies || [],
+                  repeatable: type === 'repeatable',
                 });
                 const newQuest = {
                   id: newQuestRef.id,
@@ -456,9 +526,12 @@ const App = () => {
                   description,
                   difficulty,
                   type,
-                  done: false,
+                  status: 'not_started',
                   subquests: [],
                   priority: quests.reduce((max, q) => (q.priority > max ? q.priority : max), 0) + 1,
+                  deadline: deadline || null,
+                  dependencies: dependencies || [],
+                  repeatable: type === 'repeatable',
                 };
                 setQuests([...quests, newQuest]);
                 setShowQuestModal(false);
@@ -475,6 +548,7 @@ const App = () => {
               setShowInventoryModal={setShowInventoryModal}
               inventory={inventory}
               applyItem={applyItem}
+              quests={quests}
             />
           </>
         )}

@@ -1,13 +1,27 @@
-const QuestModal = ({ show, onClose, type, onConfirm }) => {
+import React from 'react';
+
+const QuestModal = ({ 
+  show, 
+  onClose, 
+  type, 
+  onConfirm, 
+  quests = []  // پیش‌فرض امن برای جلوگیری از خطای map
+}) => {
   if (!show) return null;
 
-  const handleSubmit = e => {
+  const handleSubmit = (e) => {
     e.preventDefault();
-    const name = e.target.name.value;
-    const description = e.target.description.value;
+    const name = e.target.name.value.trim();
+    const description = e.target.description.value.trim();
     const difficulty = e.target.difficulty.value;
     const questType = e.target.type.value;
-    onConfirm({ name, description, difficulty, type: questType });
+    const deadline = e.target.deadline?.value || null;
+    
+    const dependencies = e.target.dependencies 
+      ? Array.from(e.target.dependencies.selectedOptions || []).map(opt => opt.value)
+      : [];
+
+    onConfirm({ name, description, difficulty, type: questType, deadline, dependencies });
   };
 
   return (
@@ -43,9 +57,37 @@ const QuestModal = ({ show, onClose, type, onConfirm }) => {
           >
             <option value="daily">روزانه</option>
             <option value="main">اصلی</option>
+            <option value="side">جانبی</option>
+            <option value="timed">زمان‌دار</option>
+            <option value="challenge">چالشی</option>
+            <option value="repeatable">تکرارشونده</option>
+          </select>
+          <input
+            name="deadline"
+            type="datetime-local"
+            placeholder="مهلت انجام (اختیاری)"
+            className="w-full bg-transparent border border-gray-600 p-2 rounded mb-3 text-white"
+          />
+          <select
+            name="dependencies"
+            multiple
+            className="w-full bg-transparent border border-gray-600 p-2 rounded mb-3 text-white"
+          >
+            {Array.isArray(quests) && quests.length > 0 ? (
+              quests.map((q) => (
+                <option key={q.id} value={q.id}>
+                  {q.name}
+                </option>
+              ))
+            ) : (
+              <option disabled>کوئستی برای انتخاب وجود ندارد</option>
+            )}
           </select>
           <div className="flex justify-end space-x-2">
-            <button type="submit" className="bg-purple-500 px-4 py-2 rounded hover:bg-purple-400 transition">
+            <button 
+              type="submit" 
+              className="bg-purple-500 px-4 py-2 rounded hover:bg-purple-400 transition"
+            >
               افزودن
             </button>
             <button
