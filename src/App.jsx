@@ -9,14 +9,14 @@ import Modals from './Modals';
 
 const App = () => {
   const [level, setLevel] = useState(1);
-  const [xp, setXp] = useState(0);
+  const [xp, setXp] = useState(10);
   const [maxXP, setMaxXP] = useState(980);
   const [coins, setCoins] = useState(0);
   const [hp, setHp] = useState(100);
   const [maxHp, setMaxHp] = useState(100);
   const [mana, setMana] = useState(120);
   const [maxMana, setMaxMana] = useState(120);
-  const [quests, setQuests] = useState([]); // همیشه با آرایه خالی شروع می‌شود
+  const [quests, setQuests] = useState([]);
   const [currentQuestType, setCurrentQuestType] = useState('daily');
   const [currentSubquestParentId, setCurrentSubquestParentId] = useState(null);
   const [showQuestModal, setShowQuestModal] = useState(false);
@@ -84,6 +84,22 @@ const App = () => {
     };
     loadState();
   }, []);
+
+  useEffect(() => {
+    const regenerate = () => {
+      const now = new Date();
+      const hour = now.getUTCHours() + 4;
+      const baseRate = 0.01;
+      let regenRate = baseRate;
+      if (hour >= 20 || hour < 6) regenRate = baseRate * 2;
+      if (hp < maxHp * 0.3 || mana < maxMana * 0.3) regenRate *= 1.5;
+      setHp(prev => Math.min(prev + maxHp * regenRate, maxHp));
+      setMana(prev => Math.min(prev + maxMana * regenRate, maxMana));
+    };
+    const interval = setInterval(regenerate, 3600000);
+    regenerate();
+    return () => clearInterval(interval);
+  }, [hp, maxHp, mana, maxMana]);
 
   // Check quest deadlines
   useEffect(() => {
@@ -264,6 +280,13 @@ const App = () => {
     });
   };
 
+  // Start Quest
+  const startQuest = async (id) => {
+    const quest = quests.find((q) => q.id === id);
+    if (!quest || quest.status !== 'not_started' || !canStartQuest(quest)) return;
+    setQuests(quests.map((q) => (q.id === id ? { ...q, status: 'in_progress' } : q)));
+  };
+
   // Complete Quest
   const completeQuest = async (id) => {
     const quest = quests.find((q) => q.id === id);
@@ -313,13 +336,6 @@ const App = () => {
     } else {
       setQuests(quests.map((q) => (q.id === id ? { ...q, status: 'completed' } : q)));
     }
-  };
-
-  // Start Quest
-  const startQuest = async (id) => {
-    const quest = quests.find((q) => q.id === id);
-    if (!quest || quest.status !== 'not_started' || !canStartQuest(quest)) return;
-    setQuests(quests.map((q) => (q.id === id ? { ...q, status: 'in_progress' } : q)));
   };
 
   // Complete Subquest

@@ -34,7 +34,7 @@ const Header = ({
               <span className="mr-2">HP • <span className='text-sm text-gray-300'>{hp}/{maxHp}</span></span>
               <div className="w-32 bg-gray-700 h-2 rounded overflow-hidden">
                 <div
-                  className="bg-red-500 h-2 rounded transition-all duration-300"
+                  className="!bg-red-500 h-2 rounded transition-all duration-300"
                   style={progressBarStyle(hp, maxHp)}
                 ></div>
               </div>
@@ -43,7 +43,7 @@ const Header = ({
               <span className="mr-2">MA • <span className='text-sm text-gray-300'>{mana}/{maxMana}</span></span>
               <div className="w-32 bg-gray-700 h-2 rounded overflow-hidden">
                 <div
-                  className="bg-purple-700 h-2 rounded transition-all duration-300"
+                  className="!bg-purple-700 h-2 rounded transition-all duration-300"
                   style={progressBarStyle(mana, maxMana)}
                 ></div>
               </div>
@@ -52,7 +52,7 @@ const Header = ({
           <span className="mt-3">XP • <span className='text-sm text-gray-300'>{xp}/{maxXP}</span></span>
           <div className="w-full bg-gray-700 h-2 rounded overflow-hidden">
             <div
-              className="!bg-purple-500 h-2 rounded transition-all duration-300"
+              className="!bg-green-500 h-2 rounded transition-all duration-300"
               style={progressBarStyle(xp, maxXP)}
             ></div>
           </div>
