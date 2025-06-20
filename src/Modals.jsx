@@ -1,14 +1,16 @@
-import React from 'react';
-import QuestModal from './QuestModal';
-import SubquestModal from './SubquestModal';
-import ShopModal from './ShopModal';
-import InventoryModal from './InventoryModal';
+import React from "react";
+import QuestModal from "./QuestModal";
+import SubquestModal from "./SubquestModal";
+import ShopModal from "./ShopModal";
+import InventoryModal from "./InventoryModal";
 
 const Modals = ({
   showQuestModal,
   setShowQuestModal,
   currentQuestType,
   onQuestConfirm,
+  editingQuest,
+  onQuestCancel,
   showSubquestModal,
   setShowSubquestModal,
   onSubquestConfirm,
@@ -26,9 +28,13 @@ const Modals = ({
     <>
       <QuestModal
         show={showQuestModal}
-        onClose={() => setShowQuestModal(false)}
+        onClose={() => {
+          setShowQuestModal(false);
+          if (onQuestCancel) onQuestCancel();
+        }}
         type={currentQuestType}
         onConfirm={onQuestConfirm}
+        editingQuest={editingQuest}
       />
       <SubquestModal
         show={showSubquestModal}
