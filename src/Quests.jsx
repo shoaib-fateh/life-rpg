@@ -20,6 +20,9 @@ const Quests = () => {
   const [currentQuestType, setCurrentQuestType] = useState("daily");
   const [editingQuest, setEditingQuest] = useState(null);
 
+  // TAB state - default to "everyDay"
+  const [activeTab, setActiveTab] = useState("everyDay");
+
   // Fetch quests from DB
   useEffect(() => {
     const fetchQuests = async () => {
@@ -251,7 +254,7 @@ const Quests = () => {
     return (
       <div
         key={quest.id}
-        className={`quest-item bg-gradient-to-r from-gray-800 to-gray-700 backdrop-blur-md rounded-lg p-4 mb-4 shadow-lg hover:scale-105 transition-transform relative group ${lockedClass}`}
+        className={`quest-item bg-gradient-to-r from-gray-800 to-gray-700 backdrop-blur-md rounded-lg p-4 mb-4 shadow-lg hover:scale-[0.96] transition-transform relative group ${lockedClass}`}
         aria-disabled={!canStart && !isCompleted}
       >
         <h3 className="text-xl font-bold text-white">{quest.name}</h3>
@@ -333,10 +336,14 @@ const Quests = () => {
   // Group quests by type and repeatable property
   const questsByCategory = {
     everyDay: quests
-      .filter((q) => q.type === "daily" && q.repeatable === true && q.status !== "completed")
+      .filter(
+        (q) => q.type === "daily" && q.repeatable === true && q.status !== "completed"
+      )
       .sort((a, b) => b.priority - a.priority),
     daily: quests
-      .filter((q) => q.type === "daily" && !q.repeatable && q.status !== "completed")
+      .filter(
+        (q) => q.type === "daily" && !q.repeatable && q.status !== "completed"
+      )
       .sort((a, b) => b.priority - a.priority),
     subquest: quests
       .filter((q) => q.type === "subquest" && q.status !== "completed")
@@ -345,6 +352,14 @@ const Quests = () => {
       .filter((q) => q.type === "main" && q.status !== "completed")
       .sort((a, b) => b.priority - a.priority),
   };
+
+  // Tab labels and keys for iteration
+  const tabLabels = [
+    { key: "everyDay", label: "🔄 Every Day Quests" },
+    { key: "daily", label: "🗓️ Daily Quests" },
+    { key: "subquest", label: "🧩 Sub Quests" },
+    { key: "main", label: "🏆 Main Quests" },
+  ];
 
   return (
     <div>
@@ -357,48 +372,42 @@ const Quests = () => {
         </CustomButton>
       </div>
 
-      <div className="backdrop-blur-md bg-gray-800 bg-opacity-90 rounded-lg p-6 shadow-lg">
-        {quests.length === 0 ? (
-          <p className="text-gray-400 text-center">No quests available.</p>
-        ) : (
-          <>
-            {questsByCategory.everyDay.length > 0 && (
-              <div className="mb-6">
-                <h2 className="text-xl font-bold text-white mb-2 capitalize">
-                  🔄 Every Day Quests
-                </h2>
-                {questsByCategory.everyDay.map(renderQuest)}
-              </div>
-            )}
+      <div className="bg-gray-900 bg-opacity-80 backdrop-blur-md rounded-lg shadow-lg p-4">
+        {/* Tabs */}
+        <div className="flex border-b border-gray-700 mb-4">
+          {tabLabels.map(({ key, label }) => (
+            <button
+              key={key}
+              className={`px-4 py-2 -mb-px text-sm font-semibold rounded-t-md
+                ${
+                  activeTab === key
+                    ? "bg-gray-700 text-white border border-b-0 border-gray-600"
+                    : "text-gray-400 hover:text-white"
+                }`}
+              onClick={() => setActiveTab(key)}
+              aria-selected={activeTab === key}
+              role="tab"
+              tabIndex={activeTab === key ? 0 : -1}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
 
-            {questsByCategory.daily.length > 0 && (
-              <div className="mb-6">
-                <h2 className="text-xl font-bold text-white mb-2 capitalize">
-                  🗓️ Daily Quests
-                </h2>
-                {questsByCategory.daily.map(renderQuest)}
-              </div>
-            )}
-
-            {questsByCategory.subquest.length > 0 && (
-              <div className="mb-6">
-                <h2 className="text-xl font-bold text-white mb-2 capitalize">
-                  🧩 Sub Quests
-                </h2>
-                {questsByCategory.subquest.map(renderQuest)}
-              </div>
-            )}
-
-            {questsByCategory.main.length > 0 && (
-              <div className="mb-6">
-                <h2 className="text-xl font-bold text-white mb-2 capitalize">
-                  🏆 Main Quests
-                </h2>
-                {questsByCategory.main.map(renderQuest)}
-              </div>
-            )}
-          </>
-        )}
+        {/* Tab content */}
+        <div
+          role="tabpanel"
+          aria-labelledby={`tab-${activeTab}`}
+          className="min-h-[300px]"
+        >
+          {questsByCategory[activeTab] && questsByCategory[activeTab].length > 0 ? (
+            questsByCategory[activeTab].map(renderQuest)
+          ) : (
+            <p className="text-gray-500 text-center py-8">
+              No quests in this category.
+            </p>
+          )}
+        </div>
       </div>
 
       <Modals
