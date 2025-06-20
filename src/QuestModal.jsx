@@ -1,11 +1,6 @@
 import React, { useState, useEffect } from "react";
 
-const QuestModal = ({ 
-  show, 
-  onClose, 
-  onConfirm, 
-  editingQuest = null 
-}) => {
+const QuestModal = ({ show, onClose, onConfirm, editingQuest = null }) => {
   const [form, setForm] = useState({
     name: "",
     description: "",
@@ -113,7 +108,10 @@ const QuestModal = ({
           if (err?.code === "resource-exhausted" && attempt < 3) {
             setError("محدودیت منابع! تلاش مجدد...");
             setRetryCount(attempt + 1);
-            setTimeout(() => attemptAddQuest(attempt + 1), Math.pow(2, attempt) * 1000);
+            setTimeout(
+              () => attemptAddQuest(attempt + 1),
+              Math.pow(2, attempt) * 1000
+            );
           } else {
             setError("خطا در افزودن کوئست. لطفاً بعداً دوباره امتحان کنید.");
           }
@@ -174,14 +172,14 @@ const QuestModal = ({
           </select>
 
           {/* Show deadline input only if NOT daily or is24Hour is unchecked */}
-          {!(form.type === "daily" && !form.is24Hour) && (
+          {form.type === "daily" && !form.is24Hour && (
             <input
               type="datetime-local"
               name="deadline"
               value={form.deadline}
               onChange={onChange}
               className="w-full bg-transparent border border-gray-600 p-2 rounded mb-3"
-              placeholder="مهلت انجام کوئست"
+              placeholder="Quest deadline"
             />
           )}
 
@@ -194,7 +192,10 @@ const QuestModal = ({
               className="mr-2"
               id="is24Hour"
             />
-            <label htmlFor="is24Hour" className="text-white select-none cursor-pointer">
+            <label
+              htmlFor="is24Hour"
+              className="text-white select-none cursor-pointer"
+            >
               24 ساعته
             </label>
           </div>

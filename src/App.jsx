@@ -18,7 +18,7 @@ db.version(1).stores({
 const App = () => {
   // Player state
   const [level, setLevel] = useState(1);
-  const [xp, setXp] = useState(10);
+  const [xp, setXp] = useState(0);
   const [maxXP, setMaxXP] = useState(980);
   const [coins, setCoins] = useState(0);
   const [hp, setHp] = useState(100);
@@ -180,19 +180,24 @@ const App = () => {
   // Regenerate HP and Mana hourly with conditions
   useEffect(() => {
     const regenerate = () => {
-      const now = new Date();
-      const hour = (now.getUTCHours() + 4) % 24; // timezone offset UTC+4
-      const baseRate = 0.01;
-      let regenRate = baseRate;
-      if (hour >= 20 || hour < 6) regenRate = baseRate * 2;
-      if (hp < maxHp * 0.3 || mana < maxMana * 0.3) regenRate *= 1.5;
+      if (hp < maxHp || mana < maxMana) {
+        const now = new Date();
+        const hour = (now.getUTCHours() + 4) % 24;
+        const baseRate = 0.01;
+        let regenRate = baseRate;
 
-      setHp((prev) => Math.min(prev + maxHp * regenRate, maxHp));
-      setMana((prev) => Math.min(prev + maxMana * regenRate, maxMana));
+        // Nighttime bonus (8pm-6am)
+        if (hour >= 20 || hour < 6) regenRate = baseRate * 2;
+
+        // Critical low bonus
+        if (hp < maxHp * 0.3 || mana < maxMana * 0.3) regenRate *= 1.5;
+
+        setHp((prev) => Math.min(prev + maxHp * regenRate, maxHp));
+        setMana((prev) => Math.min(prev + maxMana * regenRate, maxMana));
+      }
     };
 
-    const interval = setInterval(regenerate, 3600000);
-    regenerate();
+    const interval = setInterval(regenerate, 3600000); // Every hour
     return () => clearInterval(interval);
   }, [hp, maxHp, mana, maxMana]);
 
@@ -311,13 +316,16 @@ const App = () => {
   };
 
   // Start quest with deadline handling for 24h quests
+  // In App.jsx, modify the startQuest function:
   const startQuest = async (id) => {
     const quest = quests.find((q) => q.id === id);
     if (!quest || quest.status !== "not_started") return;
     if (!canStartQuest(quest)) return;
 
     let newDeadline = quest.deadline;
-    if (quest.type === "daily" && !quest.deadline && quest.is24Hour) {
+
+    // Handle 24-hour quests
+    if (quest.is24Hour) {
       const now = new Date();
       const deadlineDate = new Date(now.getTime() + 24 * 60 * 60 * 1000);
       newDeadline = deadlineDate.toISOString();
@@ -337,37 +345,45 @@ const App = () => {
     if (quest.status === "completed" || quest.status === "failed") return;
     if (!canStartQuest(quest)) return;
 
-    // Base reward and cost values with multipliers
+    // Calculate resource costs based on quest difficulty
+    let hpCost =
+      quest.type === "main" ? 20 : quest.type === "challenge" ? 30 : 5;
+    let manaCost = quest.difficulty === "hard" ? 15 : 5;
+
+    if (quest.difficulty === "medium") {
+      hpCost = Math.floor(hpCost * 1.1);
+      manaCost = Math.floor(manaCost * 1.1);
+    } else if (quest.difficulty === "hard") {
+      hpCost = Math.floor(hpCost * 1.35);
+      manaCost = Math.floor(manaCost * 1.35);
+    }
+
+    // Check resources before deducting
+    if (hp < hpCost || mana < manaCost) {
+      console.log("Not enough HP or Mana to complete the quest");
+      return;
+    }
+
+    // Deduct resources first
+    setHp((prev) => Math.max(0, prev - hpCost));
+    setMana((prev) => Math.max(0, prev - manaCost));
+
+    // Then calculate and apply rewards
     let baseXP =
       quest.xp ||
       (quest.type === "main" ? 1000 : quest.type === "challenge" ? 1500 : 30);
     let baseCoins =
       quest.coins ||
       (quest.type === "main" ? 500 : quest.type === "challenge" ? 750 : 50);
-    let hpCost =
-      quest.type === "main" ? 20 : quest.type === "challenge" ? 30 : 5;
-    let manaCost = quest.difficulty === "hard" ? 15 : 5;
 
     if (quest.difficulty === "medium") {
       baseXP *= 1.1;
       baseCoins *= 1.1;
-      hpCost *= 1.1;
-      manaCost *= 1.1;
-    }
-    if (quest.difficulty === "hard") {
+    } else if (quest.difficulty === "hard") {
       baseXP *= 1.35;
       baseCoins *= 1.35;
-      hpCost *= 1.35;
-      manaCost *= 1.35;
     }
 
-    // Check resources
-    if (hp < hpCost || mana < manaCost) {
-      console.log("Not enough HP or Mana to complete the quest");
-      return;
-    }
-
-    // Deduct resources and add rewards
     let newXp = xp + Math.floor(baseXP);
     let newLevel = level;
     let newMaxXP = maxXP;
@@ -384,19 +400,17 @@ const App = () => {
     setXp(newXp);
     setMaxXP(newMaxXP);
     setCoins((prev) => prev + Math.floor(baseCoins));
-    setHp((prev) => Math.max(0, prev - Math.floor(hpCost)));
-    setMana((prev) => Math.max(0, prev - Math.floor(manaCost)));
 
     // Update quest status
-    if (quest.repeatable) {
-      setQuests(
-        quests.map((q) => (q.id === id ? { ...q, status: "not_started" } : q))
-      );
-    } else {
-      setQuests(
-        quests.map((q) => (q.id === id ? { ...q, status: "completed" } : q))
-      );
-    }
+    setQuests(
+      quests.map((q) =>
+        q.id === id
+          ? quest.repeatable
+            ? { ...q, status: "not_started" }
+            : { ...q, status: "completed" }
+          : q
+      )
+    );
   };
 
   // Complete subquest logic

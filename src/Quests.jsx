@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from "react";
 import Dexie from "dexie";
 import CustomButton from "./CustomButton";
-import Modals from "./Modals"; // Import your modals component
+import Modals from "./Modals";
 
-// Initialize Dexie database
+// Initialize Dexie DB
 const db = new Dexie("life_rpg");
 db.version(1).stores({
   gameState: "id",
@@ -13,41 +13,36 @@ db.version(1).stores({
 
 const Quests = () => {
   const [quests, setQuests] = useState([]);
-  const [userLevel, setUserLevel] = useState(5);
+  const [userLevel, setUserLevel] = useState(1);
   const [now, setNow] = useState(new Date());
 
-  // Modal states
   const [showQuestModal, setShowQuestModal] = useState(false);
   const [currentQuestType, setCurrentQuestType] = useState("daily");
   const [editingQuest, setEditingQuest] = useState(null);
 
-  // Fetch quests from IndexedDB
+  // Fetch quests from DB
   useEffect(() => {
     const fetchQuests = async () => {
       try {
-        const questsData = await db.quests.toArray();
-        setQuests(questsData);
-      } catch (error) {
-        console.error("Error fetching quests:", error);
+        const data = await db.quests.toArray();
+        setQuests(data);
+      } catch (err) {
+        console.error("Failed to fetch quests:", err);
       }
     };
 
     fetchQuests();
-
-    // Periodic refresh
-    const intervalId = setInterval(fetchQuests, 2000);
-    return () => clearInterval(intervalId);
+    const interval = setInterval(fetchQuests, 2000);
+    return () => clearInterval(interval);
   }, []);
 
-  // Ticking clock every second
+  // Update current time every second
   useEffect(() => {
-    const timer = setInterval(() => {
-      setNow(new Date());
-    }, 1000);
-    return () => clearInterval(timer);
+    const tick = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(tick);
   }, []);
 
-  // Difficulty emoji helper
+  // Utils
   const getDifficultyEmoji = (difficulty) => {
     switch ((difficulty || "").toLowerCase()) {
       case "easy":
@@ -75,8 +70,8 @@ const Quests = () => {
       quest.status === "in_progress" &&
       quest.deadline
     ) {
-      const deadlineDate = formatDeadline(quest.deadline);
-      const diff = deadlineDate.getTime() - now.getTime();
+      const end = formatDeadline(quest.deadline);
+      const diff = end.getTime() - now.getTime();
 
       if (diff > 0) {
         const h = Math.floor(diff / (1000 * 60 * 60));
@@ -89,92 +84,126 @@ const Quests = () => {
     return null;
   };
 
-  // Start quest handler
   const startQuest = async (questId) => {
     try {
       await db.quests.update(questId, { status: "in_progress" });
-      // Optimistic UI update
       setQuests((prev) =>
         prev.map((q) =>
           q.id === questId ? { ...q, status: "in_progress" } : q
         )
       );
-    } catch (e) {
-      console.error("Error starting quest:", e);
+    } catch (err) {
+      console.error("Failed to start quest:", err);
     }
   };
 
-  // Complete quest handler
-// Complete quest handler with robust level‑up logic
-const completeQuest = async (questId) => {
-  try {
-    // 1. Mark quest completed in DB & state
-    await db.quests.update(questId, { status: "completed" });
-    setQuests(prev =>
-      prev.map(q => q.id === questId ? { ...q, status: "completed" } : q)
-    );
+  const completeQuest = async (questId) => {
+    try {
+      // 1. Mark as completed
+      await db.quests.update(questId, { status: "completed" });
+      setQuests((prev) =>
+        prev.map((q) => (q.id === questId ? { ...q, status: "completed" } : q))
+      );
 
-    // 2. Load current playerState (or defaults)
-    const ps = await db.gameState.get("playerState") || {};
-    let {
-      xp = 0,
-      level = 1,
-      maxXP = 100,    // start threshold if missing
-      hp = 100,
-      mana = 100,
-      coins = 0
-    } = ps;
+      // 2. Get player state
+      const ps = (await db.gameState.get("playerState")) || {};
+      let {
+        xp = 0,
+        level = 1,
+        maxXP = 100,
+        hp = 100,
+        maxHp = 100,
+        mana = 100,
+        maxMana = 100,
+        coins = 0,
+      } = ps;
 
-    // 3. Add quest rewards
-    const quest = quests.find(q => q.id === questId);
-    xp += (quest.xp || 0);
-    coins += (quest.coins || 0);
-    hp    += (quest.hp    || 0);
-    mana  += (quest.mana  || 0);
+      // 3. Get the quest directly from DB (fixes sync issue)
+      const quest = await db.quests.get(questId);
+      if (!quest) return;
 
-    // 4. Level‑up loop with 14% growth
-    while (xp >= maxXP) {
-      xp -= maxXP;
-      level += 1;
-      maxXP = Math.floor(maxXP * 1.14);
+      const difficulty = (quest.difficulty || "easy").toLowerCase();
+      const ranges = {
+        easy: [5, 10],
+        medium: [10, 20],
+        hard: [20, 35],
+      };
+
+      const [minD, maxD] = ranges[difficulty] || [5, 10];
+      const rand = (min, max) =>
+        Math.floor(Math.random() * (max - min + 1)) + min;
+
+      const drain = rand(minD, maxD);
+      const hpDrain = Math.floor(drain * (1 + level * 0.05));
+      const manaDrain = Math.floor(drain * (1 + level * 0.03));
+
+      if (hp < hpDrain || mana < manaDrain) {
+        alert("⚠️ Not enough HP or Mana.");
+        return;
+      }
+
+      // 4. Apply drain
+      hp = Math.max(0, hp - hpDrain);
+      mana = Math.max(0, mana - manaDrain);
+
+      // 5. Reward
+      xp += quest.xp || 0;
+      coins += quest.coins || 0;
+
+      // 6. Level up logic
+      let leveledUp = false;
+      while (xp >= maxXP) {
+        xp -= maxXP;
+        level++;
+        maxXP = Math.floor(maxXP * 1.14);
+        leveledUp = true;
+      }
+
+      if (leveledUp) {
+        maxHp = 100 + level * 15;
+        maxMana = 100 + level * 12;
+        hp = maxHp;
+        mana = maxMana;
+        coins += level * 10 + rand(0, 5);
+      }
+
+      // 7. Save state
+      const updatedState = {
+        id: "playerState",
+        xp,
+        level,
+        maxXP,
+        hp,
+        maxHp,
+        mana,
+        maxMana,
+        coins,
+      };
+      await db.gameState.put(updatedState);
+
+      setUserLevel(level); // ✅ fixed: updated only after full calc
+    } catch (err) {
+      console.error("Error completing quest:", err);
     }
+  };
 
-    // 5. Persist updated playerState (must include `id`)
-    const updatedPS = { id: "playerState", xp, level, maxXP, hp, mana, coins };
-    await db.gameState.put(updatedPS);
-
-    // 6. Reflect new level in UI immediately
-    setUserLevel(level);
-
-  } catch (e) {
-    console.error("Error completing quest or updating player state:", e);
-  }
-};
-
-
-  // Open new quest modal
   const openNewQuestModal = (type = "daily") => {
     setCurrentQuestType(type);
-    setEditingQuest(null); // Reset editing quest for new
+    setEditingQuest(null);
     setShowQuestModal(true);
   };
 
-  // Open edit quest modal
   const openEditQuestModal = (quest) => {
     setCurrentQuestType(quest.type || "daily");
     setEditingQuest(quest);
     setShowQuestModal(true);
   };
 
-  // Handle quest confirm (create or edit)
   const handleQuestConfirm = async (questData) => {
-    if (!questData.name) {
-      console.log("Quest name not provided");
-      return;
-    }
+    if (!questData.name) return;
+
     try {
       if (editingQuest) {
-        // Update existing quest in DB
         await db.quests.put({ ...editingQuest, ...questData });
         setQuests((prev) =>
           prev.map((q) =>
@@ -182,7 +211,6 @@ const completeQuest = async (questId) => {
           )
         );
       } else {
-        // Add new quest to DB
         const newQuest = {
           ...questData,
           id: Date.now().toString(),
@@ -199,77 +227,64 @@ const completeQuest = async (questId) => {
       }
       setShowQuestModal(false);
       setEditingQuest(null);
-    } catch (e) {
-      console.error("Error saving quest:", e);
+    } catch (err) {
+      console.error("Failed to save quest:", err);
     }
   };
 
-  // Cancel editing quest
   const handleQuestCancel = () => {
     setEditingQuest(null);
     setShowQuestModal(false);
   };
 
-  // Render single quest
   const renderQuest = (quest) => {
-    const canStart = userLevel >= (quest.levelRequired || 1);
+    const requiredLevel = quest.levelRequired || 1;
+    const canStart = userLevel >= requiredLevel;
     const isStarted = quest.status === "in_progress";
     const isCompleted = quest.status === "completed";
-    const remainingTime = calculateRemainingTime(quest);
-
-    // Gray overlay style if locked by level (only for not completed quests)
+    const remaining = calculateRemainingTime(quest);
     const lockedClass =
       !canStart && !isCompleted ? "opacity-50 cursor-not-allowed" : "";
+
+    if (isCompleted) return null;
 
     return (
       <div
         key={quest.id}
-        className={`quest-item bg-gradient-to-r from-gray-800 to-gray-700 backdrop-blur-md rounded-lg p-4 mb-4 shadow-lg hover:scale-105 transition-transform relative ${lockedClass}`}
+        className={`quest-item bg-gradient-to-r from-gray-800 to-gray-700 backdrop-blur-md rounded-lg p-4 mb-4 shadow-lg hover:scale-105 transition-transform relative group ${lockedClass}`}
         aria-disabled={!canStart && !isCompleted}
       >
         <h3 className="text-xl font-bold text-white">{quest.name}</h3>
         <p className="text-purple-300 mb-2 uppercase text-sm">
-          {quest.type} • {getDifficultyEmoji(quest.difficulty)} •{" "}
-          {quest.status || "not_started"}
+          {quest.type} • {getDifficultyEmoji(quest.difficulty)} • {quest.status}
         </p>
-
         {quest.description && (
           <p className="text-gray-300 mb-2">{quest.description}</p>
         )}
-
         {quest.deadline && (
           <p className="text-red-300">
             Deadline: {formatDeadline(quest.deadline).toLocaleString()}
           </p>
         )}
-
         <p className="text-sm">
           🪙 {quest.coins || 0} • {quest.xp || 0} XP
         </p>
-        <p className="text-red-300 mb-2">
-          Required Level • {quest.levelRequired || 1}
-        </p>
+        <p className="text-red-300 mb-2">Required Level • {requiredLevel}</p>
 
-        {/* Show action buttons ONLY if NOT completed */}
         {!isCompleted && (
           <div className="flex justify-between items-center mt-4 flex-wrap gap-2">
-            {/* Action Buttons */}
             <div className="flex gap-2">
               {!isStarted && (
                 <CustomButton
                   onClick={() => canStart && startQuest(quest.id)}
                   className={`bg-green-500 px-4 py-2 rounded hover:bg-green-400 transition ${
-                    !canStart
-                      ? "opacity-50 cursor-not-allowed hover:bg-green-500"
-                      : ""
+                    !canStart ? "opacity-50 cursor-not-allowed" : ""
                   }`}
                   disabled={!canStart}
-                  tabIndex={canStart ? 0 : -1}
                 >
                   Start
                 </CustomButton>
               )}
-
               {isStarted && (
                 <CustomButton
                   onClick={() => completeQuest(quest.id)}
@@ -278,7 +293,6 @@ const completeQuest = async (questId) => {
                   Complete
                 </CustomButton>
               )}
-
               {!isStarted && canStart && (
                 <CustomButton
                   onClick={() => openEditQuestModal(quest)}
@@ -288,21 +302,26 @@ const completeQuest = async (questId) => {
                 </CustomButton>
               )}
             </div>
-
-            {/* Timer Display */}
-            {remainingTime && (
-              <p className="text-sm text-orange-300 font-mono select-none">
-                🕒 {remainingTime}
-              </p>
+            {remaining && (
+              <p className="text-purple-300 text-sm">{remaining}</p>
             )}
           </div>
         )}
-
-        {/* Level requirement warning, only if not completed */}
-        {!isCompleted && !canStart && (
-          <p className="text-red-500 mt-2 select-none">
-            سطح کافی برای شروع این کوئست را ندارید.
-          </p>
+        {!isCompleted && (
+          <div
+            className="absolute bottom-1 right-2 group-hover:opacity-100 opacity-0 text-xs px-2 py-1 rounded shadow z-10
+    transition-opacity duration-300
+    whitespace-nowrap 
+    ${
+      canStart
+        ? 'bg-green-600 text-white'
+        : 'bg-red-600 text-white'
+    }"
+          >
+            {canStart
+              ? `✅ Ready! Your Level: ${userLevel}`
+              : `⚠️ Requires Level ${quest.levelRequired || 1}`}
+          </div>
         )}
       </div>
     );
@@ -310,7 +329,6 @@ const completeQuest = async (questId) => {
 
   return (
     <div>
-      {/* New Quest Button */}
       <div className="flex justify-end mb-4">
         <CustomButton
           onClick={() => openNewQuestModal("daily")}
@@ -324,11 +342,29 @@ const completeQuest = async (questId) => {
         {quests.length === 0 ? (
           <p className="text-gray-400 text-center">No quests available.</p>
         ) : (
-          quests.sort((a, b) => b.priority - a.priority).map(renderQuest)
+          ["daily", "subquest", "main"].map((type) => {
+            const filtered = quests
+              .filter((q) => q.type === type && q.status !== "completed")
+              .sort((a, b) => b.priority - a.priority);
+
+            if (filtered.length === 0) return null;
+
+            return (
+              <div key={type} className="mb-6">
+                <h2 className="text-xl font-bold text-white mb-2 capitalize">
+                  {type === "daily"
+                    ? "🗓️ Daily Quests"
+                    : type === "subquest"
+                    ? "🧩 Sub Quests"
+                    : "🏆 Main Quests"}
+                </h2>
+                {filtered.map(renderQuest)}
+              </div>
+            );
+          })
         )}
       </div>
 
-      {/* Modals */}
       <Modals
         showQuestModal={showQuestModal}
         setShowQuestModal={setShowQuestModal}
@@ -336,7 +372,6 @@ const completeQuest = async (questId) => {
         onQuestConfirm={handleQuestConfirm}
         editingQuest={editingQuest}
         onQuestCancel={handleQuestCancel}
-        // ... other modals props as needed
       />
     </div>
   );
