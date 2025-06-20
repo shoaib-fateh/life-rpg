@@ -105,16 +105,52 @@ const Quests = () => {
   };
 
   // Complete quest handler
-  const completeQuest = async (questId) => {
-    try {
-      await db.quests.update(questId, { status: "completed" });
-      setQuests((prev) =>
-        prev.map((q) => (q.id === questId ? { ...q, status: "completed" } : q))
-      );
-    } catch (e) {
-      console.error("Error completing quest:", e);
+// Complete quest handler with robust level‑up logic
+const completeQuest = async (questId) => {
+  try {
+    // 1. Mark quest completed in DB & state
+    await db.quests.update(questId, { status: "completed" });
+    setQuests(prev =>
+      prev.map(q => q.id === questId ? { ...q, status: "completed" } : q)
+    );
+
+    // 2. Load current playerState (or defaults)
+    const ps = await db.gameState.get("playerState") || {};
+    let {
+      xp = 0,
+      level = 1,
+      maxXP = 100,    // start threshold if missing
+      hp = 100,
+      mana = 100,
+      coins = 0
+    } = ps;
+
+    // 3. Add quest rewards
+    const quest = quests.find(q => q.id === questId);
+    xp += (quest.xp || 0);
+    coins += (quest.coins || 0);
+    hp    += (quest.hp    || 0);
+    mana  += (quest.mana  || 0);
+
+    // 4. Level‑up loop with 14% growth
+    while (xp >= maxXP) {
+      xp -= maxXP;
+      level += 1;
+      maxXP = Math.floor(maxXP * 1.14);
     }
-  };
+
+    // 5. Persist updated playerState (must include `id`)
+    const updatedPS = { id: "playerState", xp, level, maxXP, hp, mana, coins };
+    await db.gameState.put(updatedPS);
+
+    // 6. Reflect new level in UI immediately
+    setUserLevel(level);
+
+  } catch (e) {
+    console.error("Error completing quest or updating player state:", e);
+  }
+};
+
 
   // Open new quest modal
   const openNewQuestModal = (type = "daily") => {
