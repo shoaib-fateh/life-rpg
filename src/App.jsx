@@ -36,6 +36,11 @@ const App = () => {
   const [inventory, setInventory] = useState({});
   const particlesContainerRef = useRef(null);
   const [activeTab, setActiveTab] = useState("Quests");
+  const questsRef = useRef([]);
+
+  useEffect(() => {
+    questsRef.current = quests;
+  }, [quests]);
 
   const shopItems = [
     { id: 1, name: "HP Potion", desc: "Restores 50 HP", cost: 100 },
@@ -121,22 +126,26 @@ const App = () => {
   useEffect(() => {
     const checkDeadlines = () => {
       const now = new Date().toISOString();
+      const prev = questsRef.current;
       let hasChanges = false;
-      const updatedQuests = quests.map((q) => {
+
+      const updated = prev.map((q) => {
         if (q.deadline && q.deadline < now && q.status !== "completed") {
           hasChanges = true;
           return { ...q, status: "failed" };
         }
         return q;
       });
+
       if (hasChanges) {
-        setQuests(updatedQuests);
+        setQuests(updated);
       }
     };
-    const interval = setInterval(checkDeadlines, 60000); // Check every minute
+
+    const interval = setInterval(checkDeadlines, 60000);
     checkDeadlines();
     return () => clearInterval(interval);
-  }, [quests]);
+  }, []);
 
   // Initialize particles.js after loading and when container is ready
   useEffect(() => {
@@ -622,7 +631,11 @@ const App = () => {
             />
 
             <div className="mb-6 bg-gray-800 rounded-lg pt-2 px-1">
-              {[tabNames.notification, tabNames.quests, tabNames.achievements].map((tab) => (
+              {[
+                tabNames.notification,
+                tabNames.quests,
+                tabNames.achievements,
+              ].map((tab) => (
                 <button
                   key={tab}
                   onClick={() => setActiveTab(tab)}

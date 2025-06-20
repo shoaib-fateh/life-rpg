@@ -12,6 +12,7 @@
     "@tsparticles/react": "^3.0.0",
     "@tsparticles/slim": "^3.8.1",
     "chart.js": "^4.4.9",
+    "dexie": "^4.0.11",
     "firebase": "^11.9.1",
     "lodash": "^4.17.21",
     "particles.js": "^2.0.0",

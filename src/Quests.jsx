@@ -56,14 +56,19 @@ const Quests = () => {
   };
 
   const calculateRemainingTime = (quest) => {
-    if (quest.type === "daily" && quest.status === "in_progress" && quest.deadline) {
+    if (
+      quest.type === "daily" &&
+      quest.status === "in_progress" &&
+      quest.deadline
+    ) {
       const deadlineDate = formatDeadline(quest.deadline);
       const diff = deadlineDate.getTime() - now.getTime();
 
       if (diff > 0) {
         const h = Math.floor(diff / (1000 * 60 * 60));
         const m = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-        return `${h}h ${m}m`;
+        const s = Math.floor((diff % (1000 * 60)) / 1000);
+        return `${h}h ${m}m ${s}s`;
       }
       return "Expired";
     }
@@ -90,7 +95,8 @@ const Quests = () => {
       >
         <h3 className="text-xl font-bold text-white">{quest.name}</h3>
         <p className="text-purple-300 mb-2 uppercase text-sm">
-          {quest.type} • {getDifficultyEmoji(quest.difficulty)} • {quest.status || "not_started"}
+          {quest.type} • {getDifficultyEmoji(quest.difficulty)} •{" "}
+          {quest.status || "not_started"}
         </p>
 
         {quest.description && (
@@ -144,7 +150,9 @@ const Quests = () => {
 
           {/* Timer Display */}
           {remainingTime && (
-            <p className="text-sm text-orange-300 font-mono">🕒 {remainingTime}</p>
+            <p className="text-sm text-orange-300 font-mono">
+              🕒 {remainingTime}
+            </p>
           )}
         </div>
 
