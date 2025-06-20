@@ -1,20 +1,18 @@
 import { useState, useEffect, useRef } from "react";
 import Particles from "particles.js";
-import { db } from "./firebase";
-import {
-  collection,
-  getDocs,
-  addDoc,
-  updateDoc,
-  doc,
-  setDoc,
-  deleteDoc,
-  getDoc,
-} from "firebase/firestore";
+import Dexie from 'dexie';
 import Header from "./Header";
 import Quests from "./Quests";
 import Charts from "./Charts";
 import Modals from "./Modals";
+
+// Initialize Dexie database
+const db = new Dexie('life_rpg');
+db.version(1).stores({
+  gameState: 'id',
+  quests: 'id',
+  inventory: 'id'
+});
 
 const App = () => {
   const [level, setLevel] = useState(1);
@@ -54,28 +52,29 @@ const App = () => {
     achievements: "Achievements",
   };
 
-  // Initialize state from Firebase
+  // Initialize state from IndexedDB
   useEffect(() => {
     const loadState = async () => {
       try {
-        const [stateDocSnap, questsSnapshot] = await Promise.all([
-          getDoc(doc(db, "gameState", "playerState")),
-          getDocs(collection(db, "quests")),
+        const [playerState, questsData, inventoryItems] = await Promise.all([
+          db.gameState.get('playerState'),
+          db.quests.toArray(),
+          db.inventory.toArray()
         ]);
 
         // Load player state
-        if (stateDocSnap.exists()) {
-          const data = stateDocSnap.data();
-          setLevel(data.level || 1);
-          setXp(data.xp || 0);
-          setMaxXP(data.maxXP || 980);
-          setCoins(data.coins || 0);
-          setHp(data.hp || 100);
-          setMaxHp(data.maxHp || 100);
-          setMana(data.mana || 100);
-          setMaxMana(data.maxMana || 120);
+        if (playerState) {
+          setLevel(playerState.level || 1);
+          setXp(playerState.xp || 0);
+          setMaxXP(playerState.maxXP || 980);
+          setCoins(playerState.coins || 0);
+          setHp(playerState.hp || 100);
+          setMaxHp(playerState.maxHp || 100);
+          setMana(playerState.mana || 100);
+          setMaxMana(playerState.maxMana || 120);
         } else {
-          await setDoc(doc(db, "gameState", "playerState"), {
+          await db.gameState.put({
+            id: 'playerState',
             level: 1,
             xp: 0,
             maxXP: 980,
@@ -88,17 +87,31 @@ const App = () => {
         }
 
         // Load quests
-        const questsData = questsSnapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-          status: doc.data().status || "not_started",
-          dependencies: doc.data().dependencies || [],
-          deadline: doc.data().deadline || null,
-          subquests: doc.data().subquests || [],
+        const formattedQuests = questsData.map(quest => ({
+          ...quest,
+          status: quest.status || "not_started",
+          dependencies: quest.dependencies || [],
+          deadline: quest.deadline || null,
+          subquests: quest.subquests || [],
         }));
-        setQuests(questsData);
+        setQuests(formattedQuests);
+
+        // Load inventory
+        const inventoryData = {};
+        inventoryItems.forEach(item => {
+          let effectFn = () => {};
+          if (item.name === "HP Potion") {
+            effectFn = () => setHp(prev => Math.min(prev + 50, maxHp));
+          } else if (item.name === "Mana Potion") {
+            effectFn = () => setMana(prev => Math.min(prev + 50, maxMana));
+          } else if (item.name === "1-Hour Break") {
+            effectFn = () => console.log("1-hour break used");
+          }
+          inventoryData[item.id] = { ...item, effect: effectFn };
+        });
+        setInventory(inventoryData);
       } catch (error) {
-        console.error("خطا در لود داده‌ها از دیتابیس:", error);
+        console.error("Error loading data from database:", error);
       } finally {
         setLoading(false);
       }
@@ -191,12 +204,12 @@ const App = () => {
     }
   }, [loading, particlesContainerRef]);
 
-  // Auto-update player state to Firebase
+  // Auto-update player state to IndexedDB
   useEffect(() => {
     const updatePlayerState = async () => {
       try {
-        const stateDoc = doc(db, "gameState", "playerState");
-        await updateDoc(stateDoc, {
+        await db.gameState.put({
+          id: 'playerState',
           level,
           xp,
           maxXP,
@@ -207,116 +220,36 @@ const App = () => {
           maxMana,
         });
       } catch (error) {
-        console.error("خطا در آپدیت وضعیت بازیکن:", error);
+        console.error("Error updating player state:", error);
       }
     };
     if (!loading) updatePlayerState();
   }, [level, xp, maxXP, coins, hp, maxHp, mana, maxMana, loading]);
 
-  // Auto-update quests to Firebase
+  // Auto-update quests to IndexedDB
   useEffect(() => {
     const updateQuests = async () => {
       try {
-        await Promise.all(
-          quests.map(async (quest) => {
-            const questDocRef = doc(db, "quests", quest.id);
-            const questSnap = await getDoc(questDocRef);
-            if (questSnap.exists()) {
-              await updateDoc(questDocRef, {
-                name: quest.name,
-                description: quest.description,
-                difficulty: quest.difficulty,
-                type: quest.type,
-                status: quest.status,
-                subquests: quest.subquests || [],
-                priority: quest.priority,
-                deadline: quest.deadline || null,
-                dependencies: quest.dependencies || [],
-                repeatable: quest.repeatable || false,
-              });
-            } else {
-              await setDoc(questDocRef, {
-                name: quest.name,
-                description: quest.description,
-                difficulty: quest.difficulty,
-                type: quest.type,
-                status: quest.status,
-                subquests: quest.subquests || [],
-                priority: quest.priority,
-                deadline: quest.deadline || null,
-                dependencies: quest.dependencies || [],
-                repeatable: quest.repeatable || false,
-              });
-            }
-          })
-        );
+        await db.quests.bulkPut(quests);
       } catch (error) {
-        console.error("خطا در آپدیت کوئست‌ها:", error);
+        console.error("Error updating quests:", error);
       }
     };
     if (!loading) updateQuests();
   }, [quests, loading]);
 
-  // Auto-update inventory to Firebase
+  // Auto-update inventory to IndexedDB
   useEffect(() => {
     const updateInventory = async () => {
       try {
-        await Promise.all(
-          Object.entries(inventory).map(async ([id, item]) => {
-            const inventoryDocRef = doc(db, "inventory", id);
-            const inventorySnap = await getDoc(inventoryDocRef);
-            if (inventorySnap.exists()) {
-              await updateDoc(inventoryDocRef, {
-                name: item.name,
-                desc: item.desc,
-                count: item.count,
-                purchasedPrice: item.purchasedPrice,
-                timestamp: item.timestamp,
-              });
-            } else {
-              await setDoc(inventoryDocRef, {
-                name: item.name,
-                desc: item.desc,
-                count: item.count,
-                purchasedPrice: item.purchasedPrice,
-                timestamp: item.timestamp,
-              });
-            }
-          })
-        );
+        const items = Object.values(inventory);
+        await db.inventory.bulkPut(items);
       } catch (error) {
-        console.error("خطا در آپدیت انبار:", error);
+        console.error("Error updating inventory:", error);
       }
     };
     if (!loading) updateInventory();
   }, [inventory, loading]);
-
-  // Load inventory from Firebase
-  useEffect(() => {
-    const loadInventory = async () => {
-      const inventorySnapshot = await getDocs(collection(db, "inventory"));
-      const data = {};
-      inventorySnapshot.forEach((docSnap) => {
-        const raw = docSnap.data();
-        const id = docSnap.id;
-
-        let effectFn = () => {};
-        if (raw.name === "HP Potion") {
-          effectFn = () => setHp((prev) => Math.min(prev + 50, maxHp));
-        } else if (raw.name === "Mana Potion") {
-          effectFn = () => setMana((prev) => Math.min(prev + 50, maxMana));
-        } else if (raw.name === "1-Hour Break") {
-          effectFn = () =>
-            console.log("1-hour break used (implement logic here)");
-        }
-
-        data[id] = { ...raw, effect: effectFn };
-      });
-      setInventory(data);
-      setLoading(false);
-    };
-    loadInventory();
-  }, []);
 
   // Check if quest can be started based on dependencies
   const canStartQuest = (quest) => {
@@ -369,7 +302,7 @@ const App = () => {
     }
 
     if (hp < hpCost || mana < manaCost) {
-      console.log("منابع کافی نیست (HP یا Mana)");
+      console.log("Not enough resources (HP or Mana)");
       return;
     }
 
@@ -409,7 +342,7 @@ const App = () => {
     if (!sub || sub.done) return;
 
     if (mana < 5) {
-      console.log("منابع کافی نیست (Mana)");
+      console.log("Not enough resources (Mana)");
       return;
     }
 
@@ -436,7 +369,7 @@ const App = () => {
       type === "daily" &&
       quests.filter((q) => q.type === "daily").length >= 5
     ) {
-      console.log("محدودیت تعداد کوئست‌های روزانه (حداکثر ۵)");
+      console.log("Daily quest limit reached (max 5)");
       return;
     }
     setCurrentQuestType(type);
@@ -454,50 +387,43 @@ const App = () => {
   const buyItem = async (id) => {
     const item = shopItems.find((i) => i.id === id);
     if (!item || coins < item.cost) {
-      console.log("منابع کافی نیست یا آیتم یافت نشد");
+      console.log("Not enough coins or item not found");
       return;
     }
 
     setCoins(coins - item.cost);
 
     const itemKey = `item_${item.id}`;
-    const inventoryDocRef = doc(db, "inventory", itemKey);
-    const inventorySnap = await getDoc(inventoryDocRef);
-
-    if (inventorySnap.exists()) {
-      const currentItem = inventory[itemKey] || { count: 0 };
-      const newCount = currentItem.count + 1;
-      const updatedItem = {
-        name: item.name,
-        desc: item.desc,
-        count: newCount,
-        purchasedPrice: item.cost,
-        timestamp: Date.now(),
-        effect: item.effect || (() => {}),
-      };
-      setInventory((prev) => ({ ...prev, [itemKey]: updatedItem }));
-      await updateDoc(inventoryDocRef, { count: newCount });
-    } else {
-      const newItem = {
-        name: item.name,
-        desc: item.desc,
-        count: 1,
-        purchasedPrice: item.cost,
-        timestamp: Date.now(),
-        effect: item.effect || (() => {}),
-      };
-      const itemToSave = { ...newItem };
-      delete itemToSave.effect;
-      setInventory((prev) => ({ ...prev, [itemKey]: newItem }));
-      await setDoc(inventoryDocRef, itemToSave);
+    const existingItem = inventory[itemKey];
+    const newCount = existingItem ? existingItem.count + 1 : 1;
+    
+    let effectFn = () => {};
+    if (item.name === "HP Potion") {
+      effectFn = () => setHp(prev => Math.min(prev + 50, maxHp));
+    } else if (item.name === "Mana Potion") {
+      effectFn = () => setMana(prev => Math.min(prev + 50, maxMana));
+    } else if (item.name === "1-Hour Break") {
+      effectFn = () => console.log("1-hour break used");
     }
+
+    const newItem = {
+      id: itemKey,
+      name: item.name,
+      desc: item.desc,
+      count: newCount,
+      purchasedPrice: item.cost,
+      timestamp: Date.now(),
+      effect: effectFn
+    };
+
+    setInventory(prev => ({ ...prev, [itemKey]: newItem }));
   };
 
   // Apply Item
   const applyItem = async (id) => {
     const item = inventory[id];
     if (!item || item.count <= 0) {
-      console.log("آیتم موجود نیست یا تعداد کافی نیست");
+      console.log("Item not available or not enough quantity");
       return;
     }
 
@@ -510,29 +436,29 @@ const App = () => {
     }
 
     const newCount = item.count - 1;
-    const inventoryDocRef = doc(db, "inventory", id);
-    setInventory((prev) => {
-      const newInventory = { ...prev };
-      if (newCount <= 0) {
+    if (newCount <= 0) {
+      setInventory(prev => {
+        const newInventory = { ...prev };
         delete newInventory[id];
-        deleteDoc(inventoryDocRef);
-      } else {
-        newInventory[id] = { ...item, count: newCount };
-        updateDoc(inventoryDocRef, { count: newCount });
-      }
-      return newInventory;
-    });
+        return newInventory;
+      });
+    } else {
+      setInventory(prev => ({
+        ...prev,
+        [id]: { ...item, count: newCount }
+      }));
+    }
   };
 
   // Subquest Modal Confirmation
   const handleSubquestConfirm = async ({ name, description }) => {
     if (!name) {
-      console.log("نام ساب‌کوئست وارد نشده است");
+      console.log("Subquest name not provided");
       return;
     }
     const parent = quests.find((q) => q.id === currentSubquestParentId);
     if (!parent) {
-      console.log("کوئست والد یافت نشد");
+      console.log("Parent quest not found");
       return;
     }
     const newSubquest = {
@@ -672,27 +598,11 @@ const App = () => {
                 dependencies,
               }) => {
                 if (!name) {
-                  console.log("نام کوئست وارد نشده است");
+                  console.log("Quest name not provided");
                   return;
                 }
-                const newQuestRef = await addDoc(collection(db, "quests"), {
-                  name,
-                  description,
-                  difficulty,
-                  type,
-                  status: "not_started",
-                  subquests: [],
-                  priority:
-                    quests.reduce(
-                      (max, q) => (q.priority > max ? q.priority : max),
-                      0
-                    ) + 1,
-                  deadline: deadline || null,
-                  dependencies: dependencies || [],
-                  repeatable: type === "repeatable",
-                });
                 const newQuest = {
-                  id: newQuestRef.id,
+                  id: Date.now().toString(),
                   name,
                   description,
                   difficulty,

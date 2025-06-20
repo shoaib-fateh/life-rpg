@@ -1,31 +1,39 @@
 import React, { useState, useEffect } from "react";
-import { collection, onSnapshot, doc, updateDoc } from "firebase/firestore";
-import { db } from "./firebase";
+import Dexie from 'dexie';
 import CustomButton from "./CustomButton";
+
+// Initialize Dexie database
+const db = new Dexie('life_rpg');
+db.version(1).stores({
+  gameState: 'id',
+  quests: 'id',
+  inventory: 'id'
+});
 
 const Quests = () => {
   const [quests, setQuests] = useState([]);
   const [userLevel, setUserLevel] = useState(5);
   const [now, setNow] = useState(new Date());
 
-  // 1. Fetch quests from Firestore
+  // Fetch quests from IndexedDB
   useEffect(() => {
-    const unsubscribe = onSnapshot(
-      collection(db, "quests"),
-      (snapshot) => {
-        const questsData = snapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        }));
+    const fetchQuests = async () => {
+      try {
+        const questsData = await db.quests.toArray();
         setQuests(questsData);
-        console.log("🔥 Quests fetched:", questsData.length);
-      },
-      (error) => console.error("Error fetching quests:", error)
-    );
-    return () => unsubscribe();
+      } catch (error) {
+        console.error("Error fetching quests:", error);
+      }
+    };
+
+    fetchQuests();
+    
+    // Set up interval to periodically fetch quests
+    const intervalId = setInterval(fetchQuests, 2000);
+    return () => clearInterval(intervalId);
   }, []);
 
-  // 2. Ticking clock every second
+  // Ticking clock every second
   useEffect(() => {
     const timer = setInterval(() => {
       setNow(new Date());
@@ -33,7 +41,7 @@ const Quests = () => {
     return () => clearInterval(timer);
   }, []);
 
-  // 3. Helpers
+  // Helpers
   const getDifficultyEmoji = (difficulty) => {
     switch ((difficulty || "").toLowerCase()) {
       case "easy":
@@ -76,11 +84,11 @@ const Quests = () => {
   };
 
   const startQuest = async (questId) => {
-    await updateDoc(doc(db, "quests", questId), { status: "in_progress" });
+    await db.quests.update(questId, { status: 'in_progress' });
   };
 
   const completeQuest = async (questId) => {
-    await updateDoc(doc(db, "quests", questId), { status: "completed" });
+    await db.quests.update(questId, { status: 'completed' });
   };
 
   const renderQuest = (quest) => {
