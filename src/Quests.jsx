@@ -181,7 +181,7 @@ const Quests = () => {
       };
       await db.gameState.put(updatedState);
 
-      setUserLevel(level); // ✅ fixed: updated only after full calc
+      setUserLevel(level); // ✅ updated after all calculations
     } catch (err) {
       console.error("Error completing quest:", err);
     }
@@ -257,6 +257,7 @@ const Quests = () => {
         <h3 className="text-xl font-bold text-white">{quest.name}</h3>
         <p className="text-purple-300 mb-2 uppercase text-sm">
           {quest.type} • {getDifficultyEmoji(quest.difficulty)} • {quest.status}
+          {quest.repeatable && quest.type === "daily" && " 🔁"}
         </p>
         {quest.description && (
           <p className="text-gray-300 mb-2">{quest.description}</p>
@@ -307,24 +308,42 @@ const Quests = () => {
             )}
           </div>
         )}
+
+        {/* Tooltip with positive/negative mood based on level */}
         {!isCompleted && (
           <div
-            className="absolute bottom-1 right-2 group-hover:opacity-100 opacity-0 text-xs px-2 py-1 rounded shadow z-10
-    transition-opacity duration-300
-    whitespace-nowrap 
-    ${
-      canStart
-        ? 'bg-green-600 text-white'
-        : 'bg-red-600 text-white'
-    }"
+            className={`absolute bottom-1 right-2 group-hover:opacity-100 opacity-0 text-xs px-2 py-1 rounded shadow z-10
+              transition-opacity duration-300
+              whitespace-nowrap
+              ${
+                canStart
+                  ? "bg-green-600 text-white"
+                  : "bg-red-600 text-white"
+              }`}
           >
             {canStart
               ? `✅ Ready! Your Level: ${userLevel}`
-              : `⚠️ Requires Level ${quest.levelRequired || 1}`}
+              : `⚠️ Requires Level ${requiredLevel}`}
           </div>
         )}
       </div>
     );
+  };
+
+  // Group quests by type and repeatable property
+  const questsByCategory = {
+    everyDay: quests
+      .filter((q) => q.type === "daily" && q.repeatable === true && q.status !== "completed")
+      .sort((a, b) => b.priority - a.priority),
+    daily: quests
+      .filter((q) => q.type === "daily" && !q.repeatable && q.status !== "completed")
+      .sort((a, b) => b.priority - a.priority),
+    subquest: quests
+      .filter((q) => q.type === "subquest" && q.status !== "completed")
+      .sort((a, b) => b.priority - a.priority),
+    main: quests
+      .filter((q) => q.type === "main" && q.status !== "completed")
+      .sort((a, b) => b.priority - a.priority),
   };
 
   return (
@@ -342,26 +361,43 @@ const Quests = () => {
         {quests.length === 0 ? (
           <p className="text-gray-400 text-center">No quests available.</p>
         ) : (
-          ["daily", "subquest", "main"].map((type) => {
-            const filtered = quests
-              .filter((q) => q.type === type && q.status !== "completed")
-              .sort((a, b) => b.priority - a.priority);
-
-            if (filtered.length === 0) return null;
-
-            return (
-              <div key={type} className="mb-6">
+          <>
+            {questsByCategory.everyDay.length > 0 && (
+              <div className="mb-6">
                 <h2 className="text-xl font-bold text-white mb-2 capitalize">
-                  {type === "daily"
-                    ? "🗓️ Daily Quests"
-                    : type === "subquest"
-                    ? "🧩 Sub Quests"
-                    : "🏆 Main Quests"}
+                  🔄 Every Day Quests
                 </h2>
-                {filtered.map(renderQuest)}
+                {questsByCategory.everyDay.map(renderQuest)}
               </div>
-            );
-          })
+            )}
+
+            {questsByCategory.daily.length > 0 && (
+              <div className="mb-6">
+                <h2 className="text-xl font-bold text-white mb-2 capitalize">
+                  🗓️ Daily Quests
+                </h2>
+                {questsByCategory.daily.map(renderQuest)}
+              </div>
+            )}
+
+            {questsByCategory.subquest.length > 0 && (
+              <div className="mb-6">
+                <h2 className="text-xl font-bold text-white mb-2 capitalize">
+                  🧩 Sub Quests
+                </h2>
+                {questsByCategory.subquest.map(renderQuest)}
+              </div>
+            )}
+
+            {questsByCategory.main.length > 0 && (
+              <div className="mb-6">
+                <h2 className="text-xl font-bold text-white mb-2 capitalize">
+                  🏆 Main Quests
+                </h2>
+                {questsByCategory.main.map(renderQuest)}
+              </div>
+            )}
+          </>
         )}
       </div>
 
