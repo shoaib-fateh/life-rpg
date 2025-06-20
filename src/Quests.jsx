@@ -366,7 +366,7 @@ const Quests = () => {
       <div className="flex justify-end mb-4">
         <CustomButton
           onClick={() => openNewQuestModal("daily")}
-          className="bg-purple-600 px-6 py-2 rounded hover:bg-purple-500 transition"
+          className="absolute mt-[-2.5rem] bg-purple-600 px-6 py-2 rounded hover:bg-purple-500 transition"
         >
           + New Quest
         </CustomButton>
