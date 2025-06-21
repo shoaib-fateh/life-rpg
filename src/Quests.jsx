@@ -11,9 +11,15 @@ db.version(1).stores({
 });
 
 // --- CountdownTimer Component ---
-const CountdownTimer = ({ deadline, onExpire, onWarning }) => {
+const CountdownTimer = ({
+  deadline,
+  onExpire,
+  onWarning,
+  addNotification,
+  questName,
+}) => {
   const [timeLeft, setTimeLeft] = useState(() => {
-    const diff = deadline - Date.now();
+    const diff = new Date(deadline) - Date.now();
     return diff > 0 ? diff : 0;
   });
 
@@ -28,10 +34,14 @@ const CountdownTimer = ({ deadline, onExpire, onWarning }) => {
     if (!warned && timeLeft <= 4 * 60 * 60 * 1000) {
       setWarned(true);
       onWarning();
+      addNotification(
+        `Only 4 hours left to complete "${questName}"!`,
+        "warning"
+      );
     }
 
     const timerId = setInterval(() => {
-      const diff = deadline - Date.now();
+      const diff = new Date(deadline) - Date.now();
       if (diff <= 0) {
         setTimeLeft(0);
         clearInterval(timerId);
@@ -42,7 +52,15 @@ const CountdownTimer = ({ deadline, onExpire, onWarning }) => {
     }, 1000);
 
     return () => clearInterval(timerId);
-  }, [timeLeft, deadline, onExpire, onWarning, warned]);
+  }, [
+    timeLeft,
+    deadline,
+    onExpire,
+    onWarning,
+    warned,
+    addNotification,
+    questName,
+  ]);
 
   const formatTime = (ms) => {
     const totalSeconds = Math.floor(ms / 1000);
@@ -84,8 +102,17 @@ const InfoPopup = ({ message, onClose }) => {
 };
 
 // --- Main Quests Component ---
-const Quests = () => {
-  const [quests, setQuests] = useState([]);
+const Quests = ({
+  quests,
+  setQuests,
+  openQuestForm,
+  openSubquestForm,
+  completeQuest,
+  completeSubquest,
+  startQuest,
+  canStartQuest,
+  addNotification,
+}) => {
   const [userLevel, setUserLevel] = useState(1);
   const [now, setNow] = useState(new Date());
 
@@ -138,15 +165,18 @@ const Quests = () => {
     const fetchQuests = async () => {
       try {
         const data = await db.quests.toArray();
-        setQuests(data);
+        if (JSON.stringify(data) !== JSON.stringify(quests)) {
+          setQuests(data);
+        }
       } catch (err) {
         console.error("Failed to fetch quests:", err);
       }
     };
+
     fetchQuests();
-    const interval = setInterval(fetchQuests, 2000);
+    const interval = setInterval(fetchQuests, 5000);
     return () => clearInterval(interval);
-  }, []);
+  }, [quests]);
 
   // Update current time every second (for syncing timer UI if needed)
   useEffect(() => {
@@ -169,114 +199,37 @@ const Quests = () => {
   };
 
   // Start quest
-  const startQuest = async (questId) => {
+  const startQuestHandler = async (questId) => {
+    const quest = quests.find((q) => q.id === questId);
+    if (!quest || quest.status !== "not_started") return;
+    if (!canStartQuest(quest)) return;
+
     try {
-      await db.quests.update(questId, { status: "in_progress" });
-      setQuests((prev) =>
-        prev.map((q) =>
-          q.id === questId
-            ? {
-                ...q,
-                status: "in_progress",
-                deadline: Date.now() + 24 * 60 * 60 * 1000,
-              }
-            : q
-        )
-      );
+      await db.quests.update(questId, {
+        status: "in_progress",
+        deadline: quest.is24Hour
+          ? new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+          : quest.deadline,
+      });
+
+      addNotification(`Quest started: "${quest.name}"`, "quest");
     } catch (err) {
       console.error("Failed to start quest:", err);
     }
   };
 
   // Complete quest
-  const completeQuest = async (questId) => {
+  const completeQuestHandler = async (questId) => {
+    const quest = quests.find((q) => q.id === questId);
+    if (!quest) return;
+
     try {
       // 1. Mark as completed
       await db.quests.update(questId, { status: "completed" });
-      setQuests((prev) =>
-        prev.map((q) => (q.id === questId ? { ...q, status: "completed" } : q))
-      );
 
-      // 2. Get player state
-      const ps = (await db.gameState.get("playerState")) || {};
-      let {
-        xp = 0,
-        level = 1,
-        maxXP = 100,
-        hp = 100,
-        maxHp = 100,
-        mana = 100,
-        maxMana = 100,
-        coins = 0,
-      } = ps;
-
-      // 3. Get the quest directly from DB (fix sync issue)
-      const quest = await db.quests.get(questId);
-      if (!quest) return;
-
-      const difficulty = (quest.difficulty || "easy").toLowerCase();
-      const ranges = {
-        easy: [5, 10],
-        medium: [10, 20],
-        hard: [20, 35],
-      };
-
-      const [minD, maxD] = ranges[difficulty] || [5, 10];
-      const rand = (min, max) =>
-        Math.floor(Math.random() * (max - min + 1)) + min;
-
-      const drain = rand(minD, maxD);
-      const hpDrain = Math.floor(drain * (1 + level * 0.05));
-      const manaDrain = Math.floor(drain * (1 + level * 0.03));
-
-      if (hp < hpDrain || mana < manaDrain) {
-        setInfoMessage("⚠️ Not enough HP or Mana to complete this quest!");
-        return;
-      }
-
-      // 4. Apply drain
-      hp = Math.max(0, hp - hpDrain);
-      mana = Math.max(0, mana - manaDrain);
-
-      // 5. Reward
-      xp += quest.xp || 0;
-      coins += quest.coins || 0;
-
-      // 6. Level up logic
-      let leveledUp = false;
-      while (xp >= maxXP) {
-        xp -= maxXP;
-        level++;
-        maxXP = Math.floor(maxXP * 1.14);
-        leveledUp = true;
-      }
-
-      if (leveledUp) {
-        maxHp = 100 + level * 15;
-        maxMana = 100 + level * 12;
-        hp = maxHp;
-        mana = maxMana;
-        coins += level * 10 + rand(0, 5);
-        setInfoMessage(`🎉 Congratulations! You leveled up to ${level}.`);
-      }
-
-      // 7. Save state
-      const updatedState = {
-        id: "playerState",
-        xp,
-        level,
-        maxXP,
-        hp,
-        maxHp,
-        mana,
-        maxMana,
-        coins,
-      };
-      await db.gameState.put(updatedState);
-
-      setUserLevel(level);
+      addNotification(`Quest completed: "${quest.name}"`, "success");
     } catch (err) {
-      console.error("Error completing quest:", err);
+      console.error("Failed to complete quest:", err);
     }
   };
 
@@ -312,17 +265,20 @@ const Quests = () => {
       });
 
       // Reset quest: status not_started, deadline 24h later
-      const newDeadline = Date.now() + 24 * 60 * 60 * 1000;
+      const newDeadline = new Date(
+        Date.now() + 24 * 60 * 60 * 1000
+      ).toISOString();
       await db.quests.update(questId, {
         status: "not_started",
         deadline: newDeadline,
       });
 
-      setInfoMessage(
-        `⏰ Quest timer expired! Penalties applied:\n- 85% HP and Mana reduction\n- 15% Coins reduction\n- Shop locked for 1 day\n- Must do 50 push-ups and slap yourself in real world.`
+      addNotification(
+        `⏰ Quest timer expired! Penalties applied:\n- 85% HP and Mana reduction\n- 15% Coins reduction`,
+        "penalty"
       );
     },
-    [setInfoMessage]
+    [addNotification]
   );
 
   // Open new quest modal
@@ -346,11 +302,6 @@ const Quests = () => {
     try {
       if (editingQuest) {
         await db.quests.put({ ...editingQuest, ...questData });
-        setQuests((prev) =>
-          prev.map((q) =>
-            q.id === editingQuest.id ? { ...q, ...questData } : q
-          )
-        );
       } else {
         const newQuest = {
           ...questData,
@@ -364,7 +315,6 @@ const Quests = () => {
             ) + 1,
         };
         await db.quests.add(newQuest);
-        setQuests((prev) => [...prev, newQuest]);
       }
       setShowQuestModal(false);
       setEditingQuest(null);
@@ -380,13 +330,13 @@ const Quests = () => {
   };
 
   // Warning callback for timer (4h left)
-  const onWarning = () => {
-    setInfoMessage("⌛ Only 4 hours left to complete this quest!");
+  const onWarning = (questName) => {
+    setInfoMessage(`⌛ Only 4 hours left to complete "${questName}"!`);
   };
 
   // Render each quest item
   const renderQuest = (quest) => {
-    const requiredLevel = quest.levelRequired || 1;
+    const requiredLevel = quest.requiredLevel || 1;
     const canStart = userLevel >= requiredLevel;
     const isStarted = quest.status === "in_progress";
     const isCompleted = quest.status === "completed";
@@ -412,7 +362,7 @@ const Quests = () => {
         )}
 
         {/* Show countdown timer for daily reset in Every Day tab */}
-        {activeTab === "everyDay" && (
+        {activeTab === "everyDay" && quest.repeatable && (
           <div className="mt-2 flex items-center">
             <span className="text-xs text-gray-400 mr-2">Reset in:</span>
             <span className="font-mono text-red-400 bg-black bg-opacity-30 px-2 py-1 rounded">
@@ -422,7 +372,7 @@ const Quests = () => {
         )}
 
         {/* Show regular deadline for other tabs */}
-        {activeTab !== "everyDay" && quest.deadline && (
+        {quest.deadline && (
           <p className="text-red-300 text-sm">
             Deadline: {new Date(quest.deadline).toLocaleString()}
           </p>
@@ -438,7 +388,7 @@ const Quests = () => {
             <div className="flex gap-2">
               {!isStarted && (
                 <CustomButton
-                  onClick={() => canStart && startQuest(quest.id)}
+                  onClick={() => canStart && startQuestHandler(quest.id)}
                   className={`bg-green-500 px-4 py-2 rounded hover:bg-green-400 transition ${
                     !canStart ? "opacity-50 cursor-not-allowed" : ""
                   }`}
@@ -449,7 +399,7 @@ const Quests = () => {
               )}
               {isStarted && (
                 <CustomButton
-                  onClick={() => completeQuest(quest.id)}
+                  onClick={() => completeQuestHandler(quest.id)}
                   className="bg-blue-500 px-4 py-2 rounded hover:bg-blue-400 transition"
                 >
                   Complete
@@ -469,7 +419,9 @@ const Quests = () => {
               <CountdownTimer
                 deadline={quest.deadline}
                 onExpire={() => applyPenaltyAndResetQuest(quest.id)}
-                onWarning={onWarning}
+                onWarning={() => onWarning(quest.name)}
+                addNotification={addNotification}
+                questName={quest.name}
               />
             )}
           </div>
@@ -565,7 +517,7 @@ const Quests = () => {
         <div
           role="tabpanel"
           aria-labelledby={`tab-${activeTab}`}
-          className="max-h-[420px] overflow-y-auto"
+          className="max-h-[420px] overflow-y-auto custom-scrollbar"
         >
           {questsByCategory[activeTab].length > 0 ? (
             questsByCategory[activeTab].map(renderQuest)
@@ -578,15 +530,7 @@ const Quests = () => {
       </div>
 
       {/* Quest Modal */}
-
       {showQuestModal && (
-        // <Modals
-        //   showQuestModal={showQuestModal}
-        //   onConfirm={handleQuestConfirm}
-        //   onCancel={handleQuestCancel}
-        //   initialData={editingQuest}
-        //   type={currentQuestType}
-        // />
         <Modals
           showQuestModal={showQuestModal}
           setShowQuestModal={setShowQuestModal}
@@ -596,6 +540,27 @@ const Quests = () => {
           onQuestCancel={handleQuestCancel}
         />
       )}
+
+      {/* Custom Scrollbar Styles */}
+      <style jsx>{`
+        .custom-scrollbar::-webkit-scrollbar {
+          width: 8px;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar-track {
+          background: rgba(55, 65, 81, 0.5);
+          border-radius: 4px;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+          background: rgba(139, 92, 246, 0.7);
+          border-radius: 4px;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+          background: rgba(124, 58, 237, 0.9);
+        }
+      `}</style>
     </div>
   );
 };

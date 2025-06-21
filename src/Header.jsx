@@ -11,6 +11,7 @@ const Header = ({
   maxXP,
   setShowInventoryModal,
   setShowShopModal,
+  badges
 }) => {
   // Progress bar style function
   const progressBarStyle = (value, max) => ({
@@ -25,7 +26,19 @@ const Header = ({
     <header className="backdrop-blur-md bg-white bg-opacity-10 rounded-lg p-4 mb-6 shadow-lg">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold text-purple-400">🧠 Void</h1>
+          <div className="flex items-center">
+            <h1 className="text-2xl font-bold text-purple-400">🧠 Void</h1>
+            <div className="ml-2 flex space-x-1">
+              {badges.map((badge, index) => (
+                <span 
+                  key={index} 
+                  className="text-xs bg-purple-700 px-2 py-1 rounded-full animate-pulse"
+                >
+                  {badge}
+                </span>
+              ))}
+            </div>
+          </div>
           <p>
             Level: {level} • 🪙{coins}
           </p>
@@ -65,9 +78,8 @@ const Header = ({
             Inventory
           </button>
           <button
-            onClick={() => setShowShopModal(level >= 8 ? () => setShowShopModal(true) : null)}
-            className={`bg-yellow-600 px-3 py-1 rounded text-sm hover:bg-yellow-500 transition ${level < 8 ? 'opacity-50 cursor-not-allowed' : ''}`}
-            disabled={level < 8}
+            onClick={() => setShowShopModal(true)}
+            className={`bg-yellow-600 px-3 py-1 rounded text-sm hover:bg-yellow-500 transition`}
           >
             🛒 Store
           </button>
