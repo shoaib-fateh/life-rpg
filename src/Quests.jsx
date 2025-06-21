@@ -17,12 +17,13 @@ const CountdownTimer = ({
   onWarning,
   addNotification,
   questName,
+  warningSent,
+  onWarningSent,
 }) => {
   const [timeLeft, setTimeLeft] = useState(() => {
     const diff = new Date(deadline) - Date.now();
     return diff > 0 ? diff : 0;
   });
-
   const [warned, setWarned] = useState(false);
 
   useEffect(() => {
@@ -30,14 +31,14 @@ const CountdownTimer = ({
       onExpire();
       return;
     }
-
-    if (!warned && timeLeft <= 4 * 60 * 60 * 1000) {
+    if (!warned && !warningSent && timeLeft <= 4 * 60 * 60 * 1000) {
       setWarned(true);
       onWarning();
       addNotification(
         `Only 4 hours left to complete "${questName}"!`,
         "warning"
       );
+      onWarningSent();
     }
 
     const timerId = setInterval(() => {
@@ -60,6 +61,8 @@ const CountdownTimer = ({
     warned,
     addNotification,
     questName,
+    warningSent,
+    onWarningSent,
   ]);
 
   const formatTime = (ms) => {
@@ -271,6 +274,7 @@ const Quests = ({
       await db.quests.update(questId, {
         status: "not_started",
         deadline: newDeadline,
+        warningSentForCurrentPeriod: false,
       });
 
       addNotification(
@@ -313,6 +317,7 @@ const Quests = ({
               (max, q) => (q.priority > max ? q.priority : max),
               0
             ) + 1,
+          warningSentForCurrentPeriod: false,
         };
         await db.quests.add(newQuest);
       }
@@ -336,15 +341,35 @@ const Quests = ({
 
   // Render each quest item
   const renderQuest = (quest) => {
-    const requiredLevel = quest.requiredLevel || 1;
+    const requiredLevel = quest.levelRequired;
     const canStart = userLevel >= requiredLevel;
     const isStarted = quest.status === "in_progress";
     const isCompleted = quest.status === "completed";
+
+    console.log(quest);
 
     const lockedClass =
       !canStart && !isCompleted ? "opacity-50 cursor-not-allowed" : "";
 
     if (isCompleted) return null;
+
+    if (!canStart) {
+      return (
+        <div
+          key={quest.id}
+          className="quest-item bg-gradient-to-r from-gray-800 to-gray-700 backdrop-blur-md rounded-lg p-4 mb-4 shadow-lg relative group opacity-50"
+        >
+          <h3 className="text-xl font-bold text-white">{quest.name}</h3>
+          {quest.description && (
+            <p className="text-gray-300 mb-2">{quest.description}</p>
+          )}
+          <p className="text-sm">
+            🪙 {quest.coins || 0} • {quest.xp || 0} XP
+          </p>
+          <p className="text-gray-300">Locked until level {requiredLevel}</p>
+        </div>
+      );
+    }
 
     return (
       <div
@@ -415,13 +440,19 @@ const Quests = ({
               )}
             </div>
 
-            {quest.deadline && isStarted && (
+            {quest.deadline && isStarted && activeTab !== "everyDay" && (
               <CountdownTimer
                 deadline={quest.deadline}
                 onExpire={() => applyPenaltyAndResetQuest(quest.id)}
                 onWarning={() => onWarning(quest.name)}
                 addNotification={addNotification}
                 questName={quest.name}
+                warningSent={quest.warningSentForCurrentPeriod || false}
+                onWarningSent={() =>
+                  db.quests.update(quest.id, {
+                    warningSentForCurrentPeriod: true,
+                  })
+                }
               />
             )}
           </div>
@@ -475,6 +506,44 @@ const Quests = ({
     { key: "subquest", label: "🧩 Sub Quests" },
     { key: "main", label: "🏆 Main Quests" },
   ];
+
+  const nextMidnight = new Date();
+  nextMidnight.setDate(nextMidnight.getDate() + 1);
+  nextMidnight.setHours(0, 0, 0, 0);
+  const resetDeadline = nextMidnight.toISOString();
+
+  // Reset function for all "Every Day Quests"
+  const resetEveryDayQuests = async () => {
+    const everyDayQuests = quests.filter(
+      (q) => q.type === "daily" && q.repeatable && q.status !== "completed"
+    );
+    if (everyDayQuests.length > 0) {
+      const ps = await db.gameState.get("playerState");
+      let { hp, maxHp, mana, maxMana, coins } = ps;
+      for (const quest of everyDayQuests) {
+        hp = Math.max(0, hp - Math.floor(maxHp * 0.85));
+        mana = Math.max(0, mana - Math.floor(maxMana * 0.85));
+        coins = Math.max(0, coins - Math.floor(coins * 0.15));
+      }
+      await db.gameState.put({ ...ps, hp, mana, coins });
+
+      const nextMidnight = new Date();
+      nextMidnight.setDate(nextMidnight.getDate() + 1);
+      nextMidnight.setHours(0, 0, 0, 0);
+      const newDeadline = nextMidnight.toISOString();
+      for (const quest of everyDayQuests) {
+        await db.quests.update(quest.id, {
+          status: "not_started",
+          deadline: newDeadline,
+          warningSentForCurrentPeriod: false,
+        });
+      }
+      addNotification(
+        `Every Day Quests have been reset. Penalties applied for uncompleted quests.`,
+        "penalty"
+      );
+    }
+  };
 
   return (
     <div>
@@ -540,27 +609,6 @@ const Quests = ({
           onQuestCancel={handleQuestCancel}
         />
       )}
-
-      {/* Custom Scrollbar Styles */}
-      <style jsx>{`
-        .custom-scrollbar::-webkit-scrollbar {
-          width: 8px;
-        }
-
-        .custom-scrollbar::-webkit-scrollbar-track {
-          background: rgba(55, 65, 81, 0.5);
-          border-radius: 4px;
-        }
-
-        .custom-scrollbar::-webkit-scrollbar-thumb {
-          background: rgba(139, 92, 246, 0.7);
-          border-radius: 4px;
-        }
-
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-          background: rgba(124, 58, 237, 0.9);
-        }
-      `}</style>
     </div>
   );
 };

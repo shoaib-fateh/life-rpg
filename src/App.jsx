@@ -93,11 +93,11 @@ const App = () => {
       timestamp: new Date().toISOString(),
       read: false,
     };
-    
+
     try {
       const id = await db.notifications.add(newNotification);
-      setNotifications(prev => [...prev, { ...newNotification, id }]);
-      setUnreadNotifications(prev => prev + 1);
+      setNotifications((prev) => [...prev, { ...newNotification, id }]);
+      setUnreadNotifications((prev) => prev + 1);
     } catch (e) {
       console.error("Error adding notification:", e);
     }
@@ -107,10 +107,10 @@ const App = () => {
   const markNotificationAsRead = async (id) => {
     try {
       await db.notifications.update(id, { read: true });
-      setNotifications(prev => 
-        prev.map(n => n.id === id ? {...n, read: true} : n)
+      setNotifications((prev) =>
+        prev.map((n) => (n.id === id ? { ...n, read: true } : n))
       );
-      setUnreadNotifications(prev => Math.max(0, prev - 1));
+      setUnreadNotifications((prev) => Math.max(0, prev - 1));
     } catch (e) {
       console.error("Error marking notification as read:", e);
     }
@@ -120,9 +120,7 @@ const App = () => {
   const markAllNotificationsAsRead = async () => {
     try {
       await db.notifications.toCollection().modify({ read: true });
-      setNotifications(prev => 
-        prev.map(n => ({ ...n, read: true }))
-      );
+      setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
       setUnreadNotifications(0);
     } catch (e) {
       console.error("Error marking all notifications as read:", e);
@@ -133,14 +131,14 @@ const App = () => {
   const addAchievement = async (achievement) => {
     try {
       await db.achievements.put(achievement);
-      setAchievements(prev => [...prev, achievement]);
-      
+      setAchievements((prev) => [...prev, achievement]);
+
       // Show notification
       addNotification(
         `Achievement Unlocked: ${achievement.name}! ${achievement.description}`,
         "achievement"
       );
-      
+
       // Apply achievement effects
       if (achievement.effect) {
         achievement.effect();
@@ -153,17 +151,17 @@ const App = () => {
   // Check achievements
   const checkAchievements = () => {
     // Level-based achievements
-    if (level >= 1 && !achievements.some(a => a.id === "first_step")) {
+    if (level >= 1 && !achievements.some((a) => a.id === "first_step")) {
       addAchievement({
         id: "first_step",
         name: "First Step",
         description: "Reached Level 1",
         type: "positive",
-        icon: "👣"
+        icon: "👣",
       });
     }
-    
-    if (level >= 5 && !achievements.some(a => a.id === "rising_star")) {
+
+    if (level >= 5 && !achievements.some((a) => a.id === "rising_star")) {
       addAchievement({
         id: "rising_star",
         name: "Rising Star",
@@ -171,13 +169,16 @@ const App = () => {
         type: "positive",
         icon: "⭐",
         reward: () => {
-          setCoins(prev => prev + 200);
-          setXp(prev => prev + 100);
-        }
+          setCoins((prev) => prev + 200);
+          setXp((prev) => prev + 100);
+        },
       });
     }
-    
-    if (level >= 10 && !achievements.some(a => a.id === "master_adventurer")) {
+
+    if (
+      level >= 10 &&
+      !achievements.some((a) => a.id === "master_adventurer")
+    ) {
       addAchievement({
         id: "master_adventurer",
         name: "Master Adventurer",
@@ -185,19 +186,22 @@ const App = () => {
         type: "positive",
         icon: "🏆",
         reward: () => {
-          setCoins(prev => prev + 500);
-          setMaxHp(prev => Math.floor(prev * 1.1));
-          setMaxMana(prev => Math.floor(prev * 1.1));
-        }
+          setCoins((prev) => prev + 500);
+          setMaxHp((prev) => Math.floor(prev * 1.1));
+          setMaxMana((prev) => Math.floor(prev * 1.1));
+        },
       });
     }
-    
+
     // Streak achievements
-    const streak = quests.filter(q => 
-      q.type === "daily" && q.status === "completed"
+    const streak = quests.filter(
+      (q) => q.type === "daily" && q.status === "completed"
     ).length;
-    
-    if (streak >= 3 && !achievements.some(a => a.id === "consistent_performer")) {
+
+    if (
+      streak >= 3 &&
+      !achievements.some((a) => a.id === "consistent_performer")
+    ) {
       addAchievement({
         id: "consistent_performer",
         name: "Consistent Performer",
@@ -205,12 +209,12 @@ const App = () => {
         type: "positive",
         icon: "🔥",
         reward: () => {
-          setMaxHp(prev => Math.floor(prev * 1.05));
-        }
+          setMaxHp((prev) => Math.floor(prev * 1.05));
+        },
       });
     }
-    
-    if (streak >= 7 && !achievements.some(a => a.id === "unstoppable")) {
+
+    if (streak >= 7 && !achievements.some((a) => a.id === "unstoppable")) {
       addAchievement({
         id: "unstoppable",
         name: "Unstoppable",
@@ -218,18 +222,18 @@ const App = () => {
         type: "positive",
         icon: "💪",
         reward: () => {
-          setMaxHp(prev => Math.floor(prev * 1.1));
-          setMaxMana(prev => Math.floor(prev * 1.1));
-        }
+          setMaxHp((prev) => Math.floor(prev * 1.1));
+          setMaxMana((prev) => Math.floor(prev * 1.1));
+        },
       });
     }
-    
+
     // Penalty achievement
-    const penalties = notifications.filter(n => 
-      n.message.includes("Penalty") || n.message.includes("penalty")
+    const penalties = notifications.filter(
+      (n) => n.message.includes("Penalty") || n.message.includes("penalty")
     ).length;
-    
-    if (penalties > 0 && !achievements.some(a => a.id === "careless")) {
+
+    if (penalties > 0 && !achievements.some((a) => a.id === "careless")) {
       addAchievement({
         id: "careless",
         name: "Careless",
@@ -238,16 +242,19 @@ const App = () => {
         icon: "⚠️",
         effect: () => {
           // Apply permanent penalty
-          setMaxHp(prev => Math.floor(prev * 0.98));
-          setMaxMana(prev => Math.floor(prev * 0.98));
-          addNotification("Careless achievement penalty: -2% max HP and Mana", "penalty");
-        }
+          setMaxHp((prev) => Math.floor(prev * 0.98));
+          setMaxMana((prev) => Math.floor(prev * 0.98));
+          addNotification(
+            "Careless achievement penalty: -2% max HP and Mana",
+            "penalty"
+          );
+        },
       });
     }
-    
+
     // First purchase achievement
     const purchases = Object.values(inventory).length;
-    if (purchases > 0 && !achievements.some(a => a.id === "first_purchase")) {
+    if (purchases > 0 && !achievements.some((a) => a.id === "first_purchase")) {
       addAchievement({
         id: "first_purchase",
         name: "First Purchase",
@@ -255,17 +262,20 @@ const App = () => {
         type: "positive",
         icon: "🛒",
         reward: () => {
-          setCoins(prev => prev + 100);
-        }
+          setCoins((prev) => prev + 100);
+        },
       });
     }
-    
+
     // Quest completion achievements
-    const mainQuestsCompleted = quests.filter(q => 
-      q.type === "main" && q.status === "completed"
+    const mainQuestsCompleted = quests.filter(
+      (q) => q.type === "main" && q.status === "completed"
     ).length;
-    
-    if (mainQuestsCompleted >= 1 && !achievements.some(a => a.id === "main_quest_starter")) {
+
+    if (
+      mainQuestsCompleted >= 1 &&
+      !achievements.some((a) => a.id === "main_quest_starter")
+    ) {
       addAchievement({
         id: "main_quest_starter",
         name: "Main Quest Starter",
@@ -273,8 +283,8 @@ const App = () => {
         type: "positive",
         icon: "⚔️",
         reward: () => {
-          setXp(prev => prev + 200);
-        }
+          setXp((prev) => prev + 200);
+        },
       });
     }
   };
@@ -314,9 +324,9 @@ const App = () => {
   const addBadge = (badge, duration = 5000) => {
     const newBadges = [...badges, badge];
     setBadges(newBadges);
-    
+
     setTimeout(() => {
-      setBadges(prev => prev.filter(b => b !== badge));
+      setBadges((prev) => prev.filter((b) => b !== badge));
     }, duration);
   };
 
@@ -327,7 +337,9 @@ const App = () => {
   ];
 
   const tabNames = {
-    notification: `Notification${unreadNotifications > 0 ? ` (${unreadNotifications})` : ''}`,
+    notification: `Notification${
+      unreadNotifications > 0 ? ` (${unreadNotifications})` : ""
+    }`,
     quests: "Quests",
     achievements: "Achievements",
   };
@@ -337,17 +349,17 @@ const App = () => {
     const loadState = async () => {
       try {
         const [
-          playerState, 
-          questsData, 
-          inventoryItems, 
+          playerState,
+          questsData,
+          inventoryItems,
           notificationsData,
-          achievementsData
+          achievementsData,
         ] = await Promise.all([
           db.gameState.get("playerState"),
           db.quests.toArray(),
           db.inventory.toArray(),
           db.notifications.toArray(),
-          db.achievements.toArray()
+          db.achievements.toArray(),
         ]);
 
         if (playerState) {
@@ -386,6 +398,7 @@ const App = () => {
           requiredLevel: q.requiredLevel || 1,
           coins: q.coins || 0,
           xp: q.xp || 0,
+          warningSentForCurrentPeriod: q.warningSentForCurrentPeriod || false,
         }));
         setQuests(formattedQuests);
 
@@ -415,11 +428,10 @@ const App = () => {
         // Load notifications and achievements
         setNotifications(notificationsData);
         setAchievements(achievementsData);
-        
-        // Count unread notifications
-        const unread = notificationsData.filter(n => !n.read).length;
-        setUnreadNotifications(unread);
 
+        // Count unread notifications
+        const unread = notificationsData.filter((n) => !n.read).length;
+        setUnreadNotifications(unread);
       } catch (error) {
         console.error("Error loading data from database:", error);
       } finally {
@@ -466,7 +478,10 @@ const App = () => {
           q.status !== "failed"
         ) {
           updated = true;
-          addNotification(`Quest "${q.name}" has failed! Penalty applied.`, "penalty");
+          addNotification(
+            `Quest "${q.name}" has failed! Penalty applied.`,
+            "penalty"
+          );
           return { ...q, status: "failed" };
         }
         return q;
@@ -612,7 +627,7 @@ const App = () => {
         q.id === id ? { ...q, status: "in_progress", deadline: newDeadline } : q
       )
     );
-    
+
     addNotification(`Quest started: "${quest.name}"`, "quest");
   };
 
@@ -672,7 +687,7 @@ const App = () => {
       newMaxXP = Math.floor(newMaxXP * 1.18);
       setMaxHp((prev) => Math.floor(prev * 1.1));
       setMaxMana((prev) => Math.floor(prev * 1.1));
-      
+
       // Show level up animation for each level gained
       showLevelUpAnimation(newLevel);
       addNotification(`Level up! Reached level ${newLevel}`, "level");
@@ -693,9 +708,11 @@ const App = () => {
           : q
       )
     );
-    
+
     addNotification(
-      `Quest completed: "${quest.name}"! +${Math.floor(baseXP)} XP, +${Math.floor(baseCoins)} coins`,
+      `Quest completed: "${quest.name}"! +${Math.floor(
+        baseXP
+      )} XP, +${Math.floor(baseCoins)} coins`,
       "success"
     );
   };
@@ -726,7 +743,7 @@ const App = () => {
           : q
       )
     );
-    
+
     addNotification(`Subquest completed: "${sub.name}"! +20 coins`, "success");
   };
 
@@ -791,7 +808,7 @@ const App = () => {
     };
 
     setInventory((prev) => ({ ...prev, [itemKey]: newItem }));
-    
+
     addNotification(`Purchased: ${item.name}`, "shop");
   };
 
@@ -826,7 +843,7 @@ const App = () => {
     } else {
       setInventory((prev) => ({ ...prev, [id]: { ...item, count: newCount } }));
     }
-    
+
     addNotification(`Used: ${item.name}`, "item");
   };
 
@@ -870,7 +887,7 @@ const App = () => {
 
     setQuests([...quests, newQuest]);
     setShowQuestModal(false);
-    
+
     addNotification(`New quest created: "${name}"`, "quest");
   };
 
@@ -900,7 +917,7 @@ const App = () => {
     );
     setShowSubquestModal(false);
     setCurrentSubquestParentId(null);
-    
+
     addNotification(`Subquest added to "${parent.name}": ${name}`, "quest");
   };
 
@@ -911,9 +928,11 @@ const App = () => {
         return (
           <div className="p-4">
             <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold text-purple-400">Notifications</h2>
+              <h2 className="text-xl font-bold text-purple-400">
+                Notifications
+              </h2>
               {unreadNotifications > 0 && (
-                <button 
+                <button
                   onClick={markAllNotificationsAsRead}
                   className="text-sm bg-purple-700 px-3 py-1 rounded hover:bg-purple-600 transition"
                 >
@@ -921,7 +940,7 @@ const App = () => {
                 </button>
               )}
             </div>
-            
+
             {notifications.length === 0 ? (
               <div className="text-center py-10 text-gray-400">
                 No notifications yet
@@ -929,12 +948,12 @@ const App = () => {
             ) : (
               <div className="space-y-3 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
                 {[...notifications].reverse().map((notification) => (
-                  <div 
-                    key={notification.id} 
+                  <div
+                    key={notification.id}
                     className={`p-4 rounded-lg border ${
-                      notification.read 
-                        ? 'bg-gray-800 border-gray-700' 
-                        : 'bg-gray-900 border-purple-500'
+                      notification.read
+                        ? "bg-gray-800 border-gray-700"
+                        : "bg-gray-900 border-purple-500"
                     }`}
                   >
                     <div className="flex justify-between">
@@ -952,7 +971,11 @@ const App = () => {
                           <span className="mr-2 text-yellow-400">⚠️</span>
                         )}
                         <div>
-                          <p className={notification.read ? 'text-gray-300' : 'text-white'}>
+                          <p
+                            className={
+                              notification.read ? "text-gray-300" : "text-white"
+                            }
+                          >
                             {notification.message}
                           </p>
                           <p className="text-xs text-gray-500 mt-1">
@@ -961,8 +984,10 @@ const App = () => {
                         </div>
                       </div>
                       {!notification.read && (
-                        <button 
-                          onClick={() => markNotificationAsRead(notification.id)}
+                        <button
+                          onClick={() =>
+                            markNotificationAsRead(notification.id)
+                          }
                           className="text-gray-400 hover:text-white text-sm"
                         >
                           Mark read
@@ -992,30 +1017,37 @@ const App = () => {
       case "achievements":
         return (
           <div className="p-4">
-            <h2 className="text-xl font-bold text-purple-400 mb-4">Achievements</h2>
-            
+            <h2 className="text-xl font-bold text-purple-400 mb-4">
+              Achievements
+            </h2>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {achievements.length === 0 ? (
                 <div className="col-span-2 text-center py-10 text-gray-400">
                   No achievements earned yet
                 </div>
               ) : (
-                achievements.map(achievement => (
-                  <div 
+                achievements.map((achievement) => (
+                  <div
                     key={achievement.id}
                     className={`p-4 rounded-lg border ${
-                      achievement.type === "positive" 
-                        ? "border-green-500 bg-green-900/20" 
+                      achievement.type === "positive"
+                        ? "border-green-500 bg-green-900/20"
                         : "border-red-500 bg-red-900/20"
                     }`}
                   >
                     <div className="flex items-start">
                       <span className="text-2xl mr-3">{achievement.icon}</span>
                       <div>
-                        <h3 className="font-bold text-lg">{achievement.name}</h3>
-                        <p className="text-gray-300">{achievement.description}</p>
+                        <h3 className="font-bold text-lg">
+                          {achievement.name}
+                        </h3>
+                        <p className="text-gray-300">
+                          {achievement.description}
+                        </p>
                         <p className="text-xs text-gray-500 mt-2">
-                          Earned on: {new Date(achievement.timestamp).toLocaleDateString()}
+                          Earned on:{" "}
+                          {new Date(achievement.timestamp).toLocaleDateString()}
                         </p>
                       </div>
                     </div>
@@ -1068,15 +1100,19 @@ const App = () => {
                 <div className="absolute inset-0 bg-black bg-opacity-70 backdrop-blur-md"></div>
                 <div className="relative bg-gradient-to-r from-purple-600/30 to-blue-500/30 border border-white/20 rounded-xl p-8 shadow-2xl max-w-md w-full text-center backdrop-blur-xl animate-pop-in">
                   <div className="text-6xl mb-4 animate-bounce">🎉</div>
-                  <h2 className="text-3xl font-bold text-white mb-2">LEVEL UP!</h2>
-                  <p className="text-5xl font-bold text-yellow-400 mb-6">{newLevel}</p>
+                  <h2 className="text-3xl font-bold text-white mb-2">
+                    LEVEL UP!
+                  </h2>
+                  <p className="text-5xl font-bold text-yellow-400 mb-6">
+                    {newLevel}
+                  </p>
                   <p className="text-purple-200">
                     You've grown stronger! Max HP and Mana increased.
                   </p>
                 </div>
               </div>
             )}
-            
+
             <Header
               level={level}
               coins={coins}
@@ -1136,7 +1172,6 @@ const App = () => {
           </>
         )}
       </div>
-  
     </div>
   );
 };
