@@ -48,7 +48,7 @@ const Header = ({
               <span className="mr-2">
                 HP •{" "}
                 <span className="text-sm text-gray-300">
-                  {hp}/{maxHp}
+                  {Math.floor(hp)}/{Math.floor(maxHp)}
                 </span>
               </span>
               <div className="w-32 bg-gray-700 h-2 rounded overflow-hidden">
@@ -62,7 +62,7 @@ const Header = ({
               <span className="mr-2">
                 MA •{" "}
                 <span className="text-sm text-gray-300">
-                  {mana}/{maxMana}
+                  {Math.floor(mana)}/{Math.floor(maxMana)}
                 </span>
               </span>
               <div className="w-32 bg-gray-700 h-2 rounded overflow-hidden">

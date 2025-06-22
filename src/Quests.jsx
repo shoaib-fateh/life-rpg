@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import Dexie from "dexie";
 import CustomButton from "./CustomButton";
 import Modals from "./Modals";
+import { CountdownCircleTimer } from "react-countdown-circle-timer";
 
 // Initialize Dexie DB
 const db = new Dexie("life_rpg");
@@ -359,21 +360,21 @@ const Quests = ({
         )}
 
         {/* Show countdown timer for daily reset in Every Day tab */}
-        {activeTab === "everyDay" && quest.repeatable && (
+        {/* {activeTab === "everyDay" && quest.repeatable && (
           <div className="mt-2 flex items-center">
             <span className="text-xs text-gray-400 mr-2">Reset in:</span>
             <span className="font-mono text-red-400 bg-black bg-opacity-30 px-2 py-1 rounded">
               {formatResetTime(resetTimeLeft)}
             </span>
           </div>
-        )}
+        )} */}
 
         {/* Show regular deadline for other tabs */}
-        {quest.deadline && (
+        {/* {quest.deadline && (
           <p className="text-red-300 text-sm">
             Deadline: {new Date(quest.deadline).toLocaleString()}
           </p>
-        )}
+        )} */}
 
         <p className="text-sm">
           🪙 {quest.coins || 0} • {quest.xp || 0} XP
@@ -560,6 +561,107 @@ const Quests = ({
           aria-labelledby={`tab-${activeTab}`}
           className="max-h-[420px] overflow-y-auto custom-scrollbar"
         >
+          {activeTab === "everyDay" && (
+            <div className="mt-4 mb-6">
+              <div className="flex justify-center items-center space-x-1 sm:space-x-2">
+                {/* Hours */}
+                <div className="relative">
+                  <CountdownCircleTimer
+                    key={`hours-${Math.floor(resetTimeLeft / 1000)}`}
+                    isPlaying
+                    duration={24 * 60 * 60}
+                    initialRemainingTime={Math.floor(resetTimeLeft / 1000)}
+                    colors={[["#EF4444"]]}
+                    trailColor="#374151"
+                    strokeWidth={8}
+                    size={80}
+                    rotation="counterclockwise"
+                    onComplete={() => {
+                      resetEveryDayQuests();
+                      return { shouldRepeat: false };
+                    }}
+                  >
+                    {({ remainingTime }) => {
+                      const hours = Math.floor(remainingTime / 3600);
+                      return (
+                        <div className="flex flex-col items-center">
+                          <div className="text-xl font-bold text-red-400">
+                            {hours.toString().padStart(2, "0")}
+                          </div>
+                          <div className="text-[0.6rem] text-gray-400">HOU</div>
+                        </div>
+                      );
+                    }}
+                  </CountdownCircleTimer>
+                  <div className="absolute inset-0 rounded-full border-2 border-red-500/30 animate-ping opacity-0"></div>
+                </div>
+
+                <div className="text-xl font-bold text-yellow-400 pb-4">:</div>
+
+                {/* Minutes */}
+                <div className="relative">
+                  <CountdownCircleTimer
+                    key={`minutes-${Math.floor(resetTimeLeft / 1000)}`}
+                    isPlaying
+                    duration={3600}
+                    initialRemainingTime={Math.floor(
+                      (resetTimeLeft / 1000) % 3600
+                    )}
+                    colors={[["#F59E0B"]]}
+                    trailColor="#374151"
+                    strokeWidth={8}
+                    size={70}
+                    rotation="counterclockwise"
+                    onComplete={() => ({ shouldRepeat: true })}
+                  >
+                    {({ remainingTime }) => {
+                      const minutes = Math.floor(remainingTime / 60);
+                      return (
+                        <div className="flex flex-col items-center">
+                          <div className="text-lg font-bold text-yellow-400">
+                            {minutes.toString().padStart(2, "0")}
+                          </div>
+                          <div className="text-[0.6rem] text-gray-400">MIN</div>
+                        </div>
+                      );
+                    }}
+                  </CountdownCircleTimer>
+                  <div className="absolute inset-0 rounded-full border-2 border-yellow-500/30 animate-ping opacity-0"></div>
+                </div>
+
+                <div className="text-xl font-bold text-green-400 pb-4">:</div>
+
+                {/* Seconds */}
+                <div className="relative">
+                  <CountdownCircleTimer
+                    key={`seconds-${Math.floor(resetTimeLeft / 1000)}`}
+                    isPlaying
+                    duration={60}
+                    initialRemainingTime={Math.floor(
+                      (resetTimeLeft / 1000) % 60
+                    )}
+                    colors={[["#10B981"]]}
+                    trailColor="#374151"
+                    strokeWidth={8}
+                    size={60}
+                    rotation="counterclockwise"
+                    onComplete={() => ({ shouldRepeat: true })}
+                  >
+                    {({ remainingTime }) => (
+                      <div className="flex flex-col items-center">
+                        <div className="text-base font-bold text-green-400">
+                          {remainingTime.toString().padStart(2, "0")}
+                        </div>
+                        <div className="text-[0.6rem] text-gray-400">SEC</div>
+                      </div>
+                    )}
+                  </CountdownCircleTimer>
+                  <div className="absolute inset-0 rounded-full border-2 border-green-500/30 animate-ping opacity-0"></div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {questsByCategory[activeTab].length > 0 ? (
             questsByCategory[activeTab].map(renderQuest)
           ) : (

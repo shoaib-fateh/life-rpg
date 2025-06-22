@@ -19,6 +19,7 @@
     "particles.js": "^2.0.0",
     "react": "^19.1.0",
     "react-chartjs-2": "^5.3.0",
+    "react-countdown-circle-timer": "^3.2.1",
     "react-dom": "^19.1.0",
     "react-scripts": "5.0.1",
     "react-tsparticles": "^2.12.2",
