@@ -163,24 +163,6 @@ const Quests = ({
       .padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
   };
 
-  // Fetch quests from DB
-  useEffect(() => {
-    const fetchQuests = async () => {
-      try {
-        const data = await db.quests.toArray();
-        if (JSON.stringify(data) !== JSON.stringify(quests)) {
-          setQuests(data);
-        }
-      } catch (err) {
-        console.error("Failed to fetch quests:", err);
-      }
-    };
-
-    fetchQuests();
-    const interval = setInterval(fetchQuests, 5000);
-    return () => clearInterval(interval);
-  }, [quests]);
-
   // Update current time every second (for syncing timer UI if needed)
   useEffect(() => {
     const tick = setInterval(() => setNow(new Date()), 1000);
@@ -208,13 +190,7 @@ const Quests = ({
     if (!canStartQuest(quest)) return;
 
     try {
-      await db.quests.update(questId, {
-        status: "in_progress",
-        deadline: quest.is24Hour
-          ? new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
-          : quest.deadline,
-      });
-
+      await startQuest(questId);
       addNotification(`Quest started: "${quest.name}"`, "quest");
     } catch (err) {
       console.error("Failed to start quest:", err);
@@ -227,12 +203,10 @@ const Quests = ({
     if (!quest) return;
 
     try {
-      // 1. Mark as completed
-      await db.quests.update(questId, { status: "completed" });
-
-      addNotification(`Quest completed: "${quest.name}"`, "success");
+      await completeQuest(questId);
     } catch (err) {
       console.error("Failed to complete quest:", err);
+      addNotification(`Failed to complete quest: "${quest.name}"`, "error");
     }
   };
 
@@ -341,12 +315,10 @@ const Quests = ({
 
   // Render each quest item
   const renderQuest = (quest) => {
-    const requiredLevel = quest.levelRequired;
+    const requiredLevel = quest.levelRequired || 1;
     const canStart = userLevel >= requiredLevel;
     const isStarted = quest.status === "in_progress";
     const isCompleted = quest.status === "completed";
-
-    console.log(quest);
 
     const lockedClass =
       !canStart && !isCompleted ? "opacity-50 cursor-not-allowed" : "";

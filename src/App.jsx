@@ -920,6 +920,13 @@ const App = () => {
 
     addNotification(`Subquest added to "${parent.name}": ${name}`, "quest");
   };
+  
+  useEffect(() => {
+    if (loading) return;
+    db.quests
+      .bulkPut(quests)
+      .catch((e) => console.error("Error updating quests:", e));
+  }, [quests, loading]);
 
   // Render content depending on active tab
   const renderTabContent = () => {
