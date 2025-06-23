@@ -13,7 +13,6 @@ const Header = ({
   setShowShopModal,
   badges,
 }) => {
-  // Progress bar style function
   const progressBarStyle = (value, max) => ({
     width: `${(value / max) * 100}%`,
     height: "20px",
@@ -30,12 +29,12 @@ const Header = ({
           <div className="flex items-center">
             <h1 className="text-2xl font-bold text-purple-400">🧠 Void</h1>
             <div className="ml-2 flex space-x-1">
-              {badges.map((badge, index) => (
+              {badges.map((badgeObj) => (
                 <span
-                  key={index}
+                  key={badgeObj.id}
                   className="text-xs bg-purple-700 px-2 py-1 rounded-full animate-pulse"
                 >
-                  {badge}
+                  {badgeObj.badge}
                 </span>
               ))}
             </div>

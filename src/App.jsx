@@ -5,6 +5,7 @@ import Header from "./Header";
 import Quests from "./Quests";
 import Charts from "./Charts";
 import Modals from "./Modals";
+import Journal from "./Journal";
 import { useLiveQuery } from "dexie-react-hooks";
 
 // Initialize Dexie database
@@ -15,6 +16,8 @@ db.version(1).stores({
   inventory: "id",
   notifications: "++id, timestamp",
   achievements: "id",
+  penalties: "++id, startTime, endTime, tasks, apology",
+  journal: "++id, text, timestamp",
 });
 
 const App = () => {
@@ -30,6 +33,11 @@ const App = () => {
   const [badges, setBadges] = useState([]);
   const [showLevelUp, setShowLevelUp] = useState(false);
   const [newLevel, setNewLevel] = useState(0);
+  const [penaltyCount, setPenaltyCount] = useState(0);
+  const [penaltyCoins, setPenaltyCoins] = useState(0);
+  const [isPenaltyActive, setIsPenaltyActive] = useState(false);
+  const [currentPenalty, setCurrentPenalty] = useState(null);
+  const [showPenaltyModal, setShowPenaltyModal] = useState(false);
 
   // Gameplay state
   const [quests, setQuests] = useState([]);
@@ -49,6 +57,7 @@ const App = () => {
   const particlesContainerRef = useRef(null);
   const questsRef = useRef([]);
   const dbPlayerState = useLiveQuery(() => db.gameState.get("playerState"));
+  const dbQuests = useLiveQuery(() => db.quests.toArray(), []);
 
   useEffect(() => {
     if (dbPlayerState) {
@@ -61,8 +70,16 @@ const App = () => {
       setMana(dbPlayerState.mana || 100);
       setMaxMana(dbPlayerState.maxMana || 120);
       setBadges(dbPlayerState.badges || []);
+      setPenaltyCount(dbPlayerState.penaltyCount || 0);
+      setPenaltyCoins(dbPlayerState.penaltyCoins || 0);
     }
   }, [dbPlayerState]);
+
+  useEffect(() => {
+    if (dbQuests) {
+      setQuests(dbQuests);
+    }
+  }, [dbQuests]);
 
   useEffect(() => {
     const initPlayerStateIfNeeded = async () => {
@@ -79,10 +96,69 @@ const App = () => {
           mana: 100,
           maxMana: 120,
           badges: [],
+          penaltyCount: 0,
+          penaltyCoins: 0,
         });
       }
     };
     initPlayerStateIfNeeded();
+  }, []);
+
+  useEffect(() => {
+    const checkDeadlines = async () => {
+      const now = new Date().toISOString();
+      let updated = false;
+      const newQuests = await Promise.all(
+        questsRef.current.map(async (q) => {
+          if (
+            q.deadline &&
+            q.deadline < now &&
+            q.status !== "completed" &&
+            q.status !== "failed"
+          ) {
+            updated = true;
+            if (q.type === "daily" && q.repeatable) {
+              // Apply penalty for Every Day Quest
+              const ps = await db.gameState.get("playerState");
+              let { hp, maxHp, mana, maxMana, coins } = ps;
+              hp = Math.max(0, hp - Math.floor(maxHp * 0.85));
+              mana = Math.max(0, mana - Math.floor(maxMana * 0.85));
+              coins = Math.max(0, coins - Math.floor(coins * 0.15));
+              await db.gameState.put({ ...ps, hp, mana, coins });
+
+              // Reset deadline to next midnight
+              const nextMidnight = new Date();
+              nextMidnight.setDate(nextMidnight.getDate() + 1);
+              nextMidnight.setHours(0, 0, 0, 0);
+              const newDeadline = nextMidnight.toISOString();
+
+              addNotification(
+                `Penalty applied for missed Every Day Quest: "${q.name}"`,
+                "penalty"
+              );
+              return {
+                ...q,
+                status: "not_started",
+                deadline: newDeadline,
+                warningSentForCurrentPeriod: false,
+              };
+            } else {
+              addNotification(
+                `Quest "${q.name}" has failed! Penalty applied.`,
+                "penalty"
+              );
+              return { ...q, status: "failed" };
+            }
+          }
+          return q;
+        })
+      );
+      if (updated) setQuests(newQuests);
+    };
+
+    const interval = setInterval(checkDeadlines, 60000);
+    checkDeadlines(); // Run immediately on load
+    return () => clearInterval(interval);
   }, []);
 
   // Add notification to DB and state
@@ -241,7 +317,6 @@ const App = () => {
         type: "negative",
         icon: "⚠️",
         effect: () => {
-          // Apply permanent penalty
           setMaxHp((prev) => Math.floor(prev * 0.98));
           setMaxMana((prev) => Math.floor(prev * 0.98));
           addNotification(
@@ -312,9 +387,23 @@ const App = () => {
         mana,
         maxMana,
         badges,
+        penaltyCount,
+        penaltyCoins,
       })
       .catch((e) => console.error("Error updating player state:", e));
-  }, [level, xp, maxXP, coins, hp, maxHp, mana, maxMana, badges]);
+  }, [
+    level,
+    xp,
+    maxXP,
+    coins,
+    hp,
+    maxHp,
+    mana,
+    maxMana,
+    badges,
+    penaltyCount,
+    penaltyCoins,
+  ]);
 
   useEffect(() => {
     questsRef.current = quests;
@@ -334,7 +423,13 @@ const App = () => {
     { id: 1, name: "HP Potion", desc: "Restores 50 HP", cost: 100 },
     { id: 2, name: "Mana Potion", desc: "Restores 50 Mana", cost: 100 },
     { id: 3, name: "1-Hour Break", desc: "Take a 1-hour break", cost: 500 },
-  ];
+  ].map((item) => {
+    let costMultiplier = 1;
+    if (penaltyCount > 0) {
+      costMultiplier = penaltyCount === 1 ? 2 : 3;
+    }
+    return { ...item, cost: item.cost * costMultiplier };
+  });
 
   const tabNames = {
     notification: `Notification${
@@ -372,6 +467,8 @@ const App = () => {
           setMana(playerState.mana || 100);
           setMaxMana(playerState.maxMana || 120);
           setBadges(playerState.badges || []);
+          setPenaltyCount(playerState.penaltyCount || 0);
+          setPenaltyCoins(playerState.penaltyCoins || 0);
         } else {
           await db.gameState.put({
             id: "playerState",
@@ -384,6 +481,8 @@ const App = () => {
             mana: 100,
             maxMana: 120,
             badges: [],
+            penaltyCount: 0,
+            penaltyCoins: 0,
           });
         }
 
@@ -444,6 +543,8 @@ const App = () => {
   // Regenerate HP and Mana hourly with conditions
   useEffect(() => {
     const regenerate = () => {
+      if (isPenaltyActive) return; // No regeneration during penalty
+      if (hp <= 0 || mana <= 0) return; // No regeneration at minimum
       if (hp < maxHp || mana < maxMana) {
         const now = new Date();
         const hour = (now.getUTCHours() + 4) % 24;
@@ -463,7 +564,7 @@ const App = () => {
 
     const interval = setInterval(regenerate, 3600000); // Every hour
     return () => clearInterval(interval);
-  }, [hp, maxHp, mana, maxMana]);
+  }, [hp, maxHp, mana, maxMana, isPenaltyActive]);
 
   // Check quest deadlines every minute
   useEffect(() => {
@@ -493,6 +594,45 @@ const App = () => {
     checkDeadlines();
     return () => clearInterval(interval);
   }, []);
+
+  // Check penalty status
+  useEffect(() => {
+    const checkPenalty = async () => {
+      const now = new Date().toISOString();
+      const activePenalties = await db.penalties
+        .where("endTime")
+        .above(now)
+        .toArray();
+      setIsPenaltyActive(activePenalties.length > 0);
+      if (activePenalties.length > 0) {
+        setCurrentPenalty(activePenalties[0]);
+        setShowPenaltyModal(true); // Show modal on load if penalty active
+      } else {
+        setCurrentPenalty(null);
+      }
+    };
+    checkPenalty();
+    const interval = setInterval(checkPenalty, 60000); // Check every minute
+    return () => clearInterval(interval);
+  }, []);
+
+  // Complete penalty task
+  const completePenaltyTask = async (penaltyId, taskIndex) => {
+    const penalty = await db.penalties.get(penaltyId);
+    if (penalty) {
+      const updatedTasks = penalty.tasks.map((task, index) =>
+        index === taskIndex ? { ...task, completed: true } : task
+      );
+      await db.penalties.update(penaltyId, { tasks: updatedTasks });
+      setCurrentPenalty({ ...penalty, tasks: updatedTasks });
+    }
+  };
+
+  // Update apology
+  const updateApology = async (penaltyId, apology) => {
+    await db.penalties.update(penaltyId, { apology });
+    setCurrentPenalty((prev) => ({ ...prev, apology }));
+  };
 
   // Initialize particles.js
   useEffect(() => {
@@ -553,9 +693,24 @@ const App = () => {
         mana,
         maxMana,
         badges,
+        penaltyCount,
+        penaltyCoins,
       })
       .catch((e) => console.error("Error updating player state:", e));
-  }, [level, xp, maxXP, coins, hp, maxHp, mana, maxMana, badges, loading]);
+  }, [
+    level,
+    xp,
+    maxXP,
+    coins,
+    hp,
+    maxHp,
+    mana,
+    maxMana,
+    badges,
+    penaltyCount,
+    penaltyCoins,
+    loading,
+  ]);
 
   // Auto-save quests
   useEffect(() => {
@@ -596,8 +751,11 @@ const App = () => {
     }
   }, [level, quests, inventory, notifications, loading]);
 
-  // Check if a quest can be started (dependencies & level)
+  // Check if a quest can be started (dependencies & level & penalty restriction)
   const canStartQuest = (quest) => {
+    if (hp <= 0 || mana <= 0) return false; // Restrict starting quests at minimum HP/Mana
+    if (isPenaltyActive && quest.type === "daily" && quest.repeatable)
+      return false; // Restrict Every Day Quests during penalty
     if (!quest.dependencies || quest.dependencies.length === 0) return true;
     if (quest.requiredLevel && level < quest.requiredLevel) return false;
 
@@ -632,6 +790,7 @@ const App = () => {
   };
 
   // Complete quest with resource and reward calculations
+  // In App.jsx, update the completeQuest function
   const completeQuest = async (id) => {
     const quest = quests.find((q) => q.id === id);
     if (!quest) return;
@@ -677,6 +836,10 @@ const App = () => {
       baseCoins *= 1.35;
     }
 
+    if (isPenaltyActive) {
+      baseXP = Math.floor(baseXP * 0.8); // Reduce XP by 20% during penalty
+    }
+
     let newXp = xp + Math.floor(baseXP);
     let newLevel = level;
     let newMaxXP = maxXP;
@@ -687,6 +850,8 @@ const App = () => {
       newMaxXP = Math.floor(newMaxXP * 1.18);
       setMaxHp((prev) => Math.floor(prev * 1.1));
       setMaxMana((prev) => Math.floor(prev * 1.1));
+      setHp(maxHp); // Max HP on level up
+      setMana(maxMana); // Max Mana on level up
 
       // Show level up animation for each level gained
       showLevelUpAnimation(newLevel);
@@ -698,13 +863,17 @@ const App = () => {
     setMaxXP(newMaxXP);
     setCoins((prev) => prev + Math.floor(baseCoins));
 
-    // Update quest status
+    // Update quest status and add completion timestamp
     setQuests(
       quests.map((q) =>
         q.id === id
-          ? quest.repeatable
-            ? { ...q, status: "not_started" }
-            : { ...q, status: "completed" }
+          ? {
+              ...q,
+              status: quest.repeatable ? "not_started" : "completed",
+              completionTimestamp: quest.repeatable
+                ? null
+                : new Date().toISOString(), // Add timestamp only for non-repeatable quests
+            }
           : q
       )
     );
@@ -829,7 +998,6 @@ const App = () => {
     } else if (item.name === "1-Hour Break") {
       setHp((prev) => Math.min(prev + 20, maxHp));
       addBadge("REST", 5000);
-      // Could add more break logic here
     }
 
     // Remove or decrement count
@@ -920,13 +1088,6 @@ const App = () => {
 
     addNotification(`Subquest added to "${parent.name}": ${name}`, "quest");
   };
-  
-  useEffect(() => {
-    if (loading) return;
-    db.quests
-      .bulkPut(quests)
-      .catch((e) => console.error("Error updating quests:", e));
-  }, [quests, loading]);
 
   // Render content depending on active tab
   const renderTabContent = () => {
@@ -1132,6 +1293,8 @@ const App = () => {
               setShowInventoryModal={setShowInventoryModal}
               setShowShopModal={setShowShopModal}
               badges={badges}
+              isPenaltyActive={isPenaltyActive}
+              showPenaltyDetails={() => setShowPenaltyModal(true)}
             />
             <div className="mb-6 bg-gray-800 rounded-lg pt-2 px-1">
               {Object.entries(tabNames).map(([key, name]) => (
@@ -1156,7 +1319,9 @@ const App = () => {
               maxHp={maxHp}
               mana={mana}
               maxMana={maxMana}
+              completedQuests={quests.filter((q) => q.status === "completed")}
             />
+            <Journal />
             <Modals
               showQuestModal={showQuestModal}
               setShowQuestModal={setShowQuestModal}
@@ -1176,6 +1341,75 @@ const App = () => {
               applyItem={applyItem}
               quests={quests}
             />
+            {showPenaltyModal && currentPenalty && (
+              <div className="fixed inset-0 flex items-center justify-center z-50">
+                <div
+                  className="absolute inset-0 bg-black bg-opacity-70 backdrop-blur-md"
+                  onClick={() => setShowPenaltyModal(false)}
+                ></div>
+                <div className="relative bg-gray-800 rounded-lg p-6 max-w-md w-full">
+                  <h2 className="text-2xl font-bold text-red-400 mb-4">
+                    Penalty Details
+                  </h2>
+                  <p className="text-gray-300 mb-4">
+                    You have been penalized for not completing your Every Day
+                    Quests on time.
+                  </p>
+                  <p className="text-gray-300 mb-4">
+                    Penalties applied:
+                    <ul className="list-disc ml-5">
+                      <li>HP and Mana reduced by 80%</li>
+                      <li>20% of coins deducted</li>
+                      <li>Experience gain reduced by 20%</li>
+                      <li>Store prices increased</li>
+                    </ul>
+                  </p>
+                  <p className="text-gray-300 mb-4">
+                    Penalty ends on:{" "}
+                    {new Date(currentPenalty.endTime).toLocaleString()}
+                  </p>
+                  <p className="text-gray-300 mb-4">
+                    Additional tasks:
+                    <ul className="list-disc ml-5">
+                      {currentPenalty.tasks.map((task, index) => (
+                        <li key={index}>
+                          {task.name} -{" "}
+                          {task.completed ? "Completed" : "Pending"}
+                          {!task.completed && (
+                            <button
+                              onClick={() =>
+                                completePenaltyTask(currentPenalty.id, index)
+                              }
+                              className="ml-2 text-sm bg-green-500 px-2 py-1 rounded"
+                            >
+                              Complete
+                            </button>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  </p>
+                  <div className="mb-4">
+                    <label className="block text-gray-300 mb-2">
+                      Apology/Reason:
+                    </label>
+                    <textarea
+                      className="w-full p-2 bg-gray-700 rounded"
+                      value={currentPenalty.apology || ""}
+                      onChange={(e) =>
+                        updateApology(currentPenalty.id, e.target.value)
+                      }
+                    />
+                  </div>
+                  <button
+                    onClick={() => setShowPenaltyModal(false)}
+                    className="bg-red-500 px-4 py-2 rounded hover:bg-red-400 transition"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            )}
           </>
         )}
       </div>
