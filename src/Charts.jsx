@@ -1,131 +1,213 @@
-import React, { useRef } from 'react';
-import { Bar, Line } from 'react-chartjs-2';
+import React, { useRef, useEffect } from 'react';
+import { Line } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
-  BarElement,
   CategoryScale,
   LinearScale,
   Tooltip,
   LineElement,
   PointElement,
+  Filler,
 } from 'chart.js';
+import { ArcElement } from 'chart.js';
+import ChartDataLabels from 'chartjs-plugin-datalabels';
+import { createGradient } from 'chartjs-plugin-gradient';
 
-ChartJS.register(BarElement, CategoryScale, LinearScale, Tooltip, LineElement, PointElement);
+// ثبت پلاگین‌ها
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  Tooltip,
+  LineElement,
+  PointElement,
+  Filler,
+  ArcElement,
+  ChartDataLabels
+);
+
+// کامپوننت RadialProgress برای XP, HP, Mana
+const RadialProgress = ({ value, maxValue, color, label, gradient }) => {
+  const canvasRef = useRef(null);
+
+  useEffect(() => {
+    const ctx = canvasRef.current.getContext('2d');
+    const chart = new ChartJS(ctx, {
+      type: 'doughnut',
+      data: {
+        datasets: [
+          {
+            data: [value, maxValue - value],
+            backgroundColor: [gradient, 'rgba(255, 255, 255, 0.1)'],
+            borderWidth: 0,
+            borderRadius: 10,
+            cutout: '80%',
+            circumference: 360,
+            rotation: 270,
+          },
+        ],
+      },
+      options: {
+        plugins: {
+          datalabels: { display: false },
+          tooltip: { enabled: false },
+        },
+        animation: {
+          duration: 2000,
+          easing: 'easeOutElastic',
+        },
+      },
+    });
+
+    // افکت پالس
+    const pulse = () => {
+      chart.data.datasets[0].backgroundColor[0] = gradient;
+      chart.update();
+      setTimeout(() => {
+        chart.data.datasets[0].backgroundColor[0] = color;
+        chart.update();
+      }, 500);
+    };
+    const interval = setInterval(pulse, 3000);
+
+    return () => {
+      chart.destroy();
+      clearInterval(interval);
+    };
+  }, [value, maxValue, color, gradient]);
+
+  return (
+    <div className="relative flex flex-col items-center">
+      <canvas ref={canvasRef} className="w-24 h-24" />
+      <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
+        <span className="text-lg font-bold text-white drop-shadow-glow">{value}</span>
+        <span className="text-xs text-gray-300">{label}</span>
+      </div>
+      <div className="absolute inset-0 animate-pulse opacity-20 rounded-full" style={{ background: color }} />
+    </div>
+  );
+};
 
 const Charts = ({ xp, maxXP, hp, maxHp, mana, maxMana, completedQuests = [] }) => {
-  const xpChartRef = useRef(null);
-  const hpChartRef = useRef(null);
-  const manaChartRef = useRef(null);
   const progressChartRef = useRef(null);
 
-  const xpChartData = {
-    labels: ['XP'],
-    datasets: [
-      {
-        label: 'XP',
-        data: [xp],
-        backgroundColor: ['#5a5af0'],
-        borderColor: ['#5a5af0'],
-        borderWidth: 1,
-      },
-    ],
+  // گرادیانت‌های نئونی
+  const createChartGradient = (ctx, color1, color2) => {
+    const gradient = ctx.createLinearGradient(0, 0, 0, 200);
+    gradient.addColorStop(0, color1);
+    gradient.addColorStop(1, color2);
+    return gradient;
   };
 
-  const hpChartData = {
-    labels: ['HP'],
-    datasets: [
-      {
-        label: 'HP',
-        data: [hp],
-        backgroundColor: ['#ff4d4d'],
-        borderColor: ['#ff4d4d'],
-        borderWidth: 1,
-      },
-    ],
-  };
-
-  const manaChartData = {
-    labels: ['Mana'],
-    datasets: [
-      {
-        label: 'Mana',
-        data: [mana],
-        backgroundColor: ['#8a2be2'],
-        borderColor: ['#8a2be2'],
-        borderWidth: 1,
-      },
-    ],
-  };
-
-  const sortedQuests = [...completedQuests].sort((a, b) => new Date(a.completionTimestamp || 0) - new Date(b.completionTimestamp || 0));
+  // داده‌های Quest Progress
+  const sortedQuests = [...completedQuests].sort((a, b) =>
+    new Date(a.completionTimestamp || 0) - new Date(b.completionTimestamp || 0)
+  );
   const cumulativeXP = sortedQuests.reduce((acc, quest) => {
     const last = acc.length ? acc[acc.length - 1] : 0;
     return [...acc, last + (quest.xp || 0)];
   }, [0]);
 
   const progressChartData = {
-    labels: ['Start', ...sortedQuests.map((_, i) => `Quest ${i + 1}`)],
+    labels: Array(cumulativeXP.length).fill(''), // بدون لیبل
     datasets: [
       {
         label: 'Cumulative XP',
         data: cumulativeXP,
-        fill: false,
-        borderColor: '#5a5af0',
-        tension: 0.1,
+        fill: true,
+        borderColor: (ctx) => createChartGradient(ctx.chart.ctx, '#5a5af0', '#ff00ff'),
+        backgroundColor: (ctx) =>
+          createChartGradient(ctx.chart.ctx, 'rgba(90, 90, 240, 0.3)', 'rgba(255, 0, 255, 0.1)'),
+        borderWidth: 3,
+        pointRadius: 0,
+        tension: 0.4,
       },
     ],
   };
 
   return (
-    <div className="backdrop-blur-md bg-white bg-opacity-10 rounded-lg p-4 shadow-lg mb-2">
-      <div className="flex space-x-4 mb-4">
-        <div className="w-1/3">
-          <Bar
-            ref={xpChartRef}
-            data={xpChartData}
-            options={{
-              scales: { y: { beginAtZero: true, max: maxXP } },
-              plugins: { legend: { display: false } },
-            }}
-          />
-        </div>
-        <div className="w-1/3">
-          <Bar
-            ref={hpChartRef}
-            data={hpChartData}
-            options={{
-              scales: { y: { beginAtZero: true, max: maxHp } },
-              plugins: { legend: { display: false } },
-            }}
-          />
-        </div>
-        <div className="w-1/3">
-          <Bar
-            ref={manaChartRef}
-            data={manaChartData}
-            options={{
-              scales: { y: { beginAtZero: true, max: maxMana } },
-              plugins: { legend: { display: false } },
-            }}
-          />
-        </div>
+    <div className="backdrop-blur-xl bg-gradient-to-b from-gray-900/50 to-gray-800/50 rounded-2xl p-6 shadow-2xl border border-white/10 mb-4 animate-fade-in">
+      {/* چارت‌های XP, HP, Mana */}
+      <div className="flex justify-around mb-8">
+        <RadialProgress
+          value={xp}
+          maxValue={maxXP}
+          color="#5a5af0"
+          gradient="rgba(90, 90, 240, 0.8)"
+          label="XP"
+        />
+        <RadialProgress
+          value={hp}
+          maxValue={maxHp}
+          color="#ff4d4d"
+          gradient="rgba(255, 77, 77, 0.8)"
+          label="HP"
+        />
+        <RadialProgress
+          value={mana}
+          maxValue={maxMana}
+          color="#8a2be2"
+          gradient="rgba(138, 43, 226, 0.8)"
+          label="Mana"
+        />
       </div>
+
+      {/* Quest Progress */}
       <div>
-        <h3 className="text-lg font-bold text-purple-400 mb-2">Quest Progress</h3>
+        <h3 className="text-xl font-bold text-purple-400 mb-4 text-center drop-shadow-glow">
+          Quest Progress
+        </h3>
         {sortedQuests.length > 0 ? (
-          <Line
-            ref={progressChartRef}
-            data={progressChartData}
-            options={{
-              scales: {
-                y: { beginAtZero: true, title: { display: true, text: 'XP' } },
-                x: { title: { display: true, text: 'Completed Quests' } },
-              },
-              plugins: { legend: { display: true } },
-            }}
-          />
+          <div className="relative">
+            <Line
+              ref={progressChartRef}
+              data={progressChartData}
+              options={{
+                scales: {
+                  y: {
+                    beginAtZero: true,
+                    grid: { color: 'rgba(255, 255, 255, 0.1)' },
+                    ticks: { color: '#fff', font: { size: 12 } },
+                    title: { display: false },
+                  },
+                  x: {
+                    grid: { display: false },
+                    ticks: { display: false },
+                  },
+                },
+                plugins: {
+                  datalabels: { display: false },
+                  tooltip: {
+                    enabled: true,
+                    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                    titleColor: '#fff',
+                    bodyColor: '#fff',
+                    borderColor: '#5a5af0',
+                    borderWidth: 1,
+                  },
+                },
+                animation: {
+                  duration: 2000,
+                  easing: 'easeOutQuad',
+                  onProgress: (animation) => {
+                    const chart = animation.chart;
+                    const ctx = chart.ctx;
+                    ctx.save();
+                    ctx.shadowColor = '#5a5af0';
+                    ctx.shadowBlur = 10;
+                    chart.draw();
+                    ctx.restore();
+                  },
+                },
+                elements: {
+                  line: { borderCapStyle: 'round' },
+                },
+              }}
+            />
+          </div>
         ) : (
-          <p className="text-gray-400 text-center">No completed quests yet.</p>
+          <p className="text-gray-400 text-center animate-pulse">
+            No completed quests yet.
+          </p>
         )}
       </div>
     </div>
