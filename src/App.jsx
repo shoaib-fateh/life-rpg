@@ -1242,6 +1242,15 @@ const App = () => {
               isPenaltyActive={isPenaltyActive}
               showPenaltyDetails={() => setShowPenaltyModal(true)}
             />
+            <Charts
+              xp={xp}
+              maxXP={maxXP}
+              hp={hp}
+              maxHp={maxHp}
+              mana={mana}
+              maxMana={maxMana}
+              completedQuests={quests.filter((q) => q.status === "completed")}
+            />
             <div className="mb-6 bg-gray-800 bg-opacity-50 rounded-lg pt-2 px-1 backdrop-blur-md border border-white/10">
               {Object.entries(tabNames).map(([key, name]) => (
                 <button
@@ -1258,15 +1267,6 @@ const App = () => {
               ))}
               <div className="px-2 py-4">{renderTabContent()}</div>
             </div>
-            <Charts
-              xp={xp}
-              maxXP={maxXP}
-              hp={hp}
-              maxHp={maxHp}
-              mana={mana}
-              maxMana={maxMana}
-              completedQuests={quests.filter((q) => q.status === "completed")}
-            />
             <Journal />
             <Modals
               showQuestModal={showQuestModal}
