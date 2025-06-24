@@ -118,7 +118,6 @@ const App = () => {
           ) {
             updated = true;
             if (q.type === "daily" && q.repeatable) {
-              // Apply penalty for Every Day Quest
               const ps = await db.gameState.get("playerState");
               let { hp, maxHp, mana, maxMana, coins } = ps;
               hp = Math.max(0, hp - Math.floor(maxHp * 0.85));
@@ -126,7 +125,6 @@ const App = () => {
               coins = Math.max(0, coins - Math.floor(coins * 0.15));
               await db.gameState.put({ ...ps, hp, mana, coins });
 
-              // Reset deadline to next midnight
               const nextMidnight = new Date();
               nextMidnight.setDate(nextMidnight.getDate() + 1);
               nextMidnight.setHours(0, 0, 0, 0);
@@ -157,11 +155,10 @@ const App = () => {
     };
 
     const interval = setInterval(checkDeadlines, 60000);
-    checkDeadlines(); // Run immediately on load
+    checkDeadlines();
     return () => clearInterval(interval);
   }, []);
 
-  // Add notification to DB and state
   const addNotification = async (message, type = "info") => {
     const newNotification = {
       message,
@@ -179,7 +176,6 @@ const App = () => {
     }
   };
 
-  // Mark notification as read
   const markNotificationAsRead = async (id) => {
     try {
       await db.notifications.update(id, { read: true });
@@ -192,7 +188,6 @@ const App = () => {
     }
   };
 
-  // Mark all notifications as read
   const markAllNotificationsAsRead = async () => {
     try {
       await db.notifications.toCollection().modify({ read: true });
@@ -203,19 +198,16 @@ const App = () => {
     }
   };
 
-  // Add achievement
   const addAchievement = async (achievement) => {
     try {
       await db.achievements.put(achievement);
       setAchievements((prev) => [...prev, achievement]);
 
-      // Show notification
       addNotification(
         `Achievement Unlocked: ${achievement.name}! ${achievement.description}`,
         "achievement"
       );
 
-      // Apply achievement effects
       if (achievement.effect) {
         achievement.effect();
       }
@@ -224,9 +216,7 @@ const App = () => {
     }
   };
 
-  // Check achievements
   const checkAchievements = () => {
-    // Level-based achievements
     if (level >= 1 && !achievements.some((a) => a.id === "first_step")) {
       addAchievement({
         id: "first_step",
@@ -269,7 +259,6 @@ const App = () => {
       });
     }
 
-    // Streak achievements
     const streak = quests.filter(
       (q) => q.type === "daily" && q.status === "completed"
     ).length;
@@ -304,7 +293,6 @@ const App = () => {
       });
     }
 
-    // Penalty achievement
     const penalties = notifications.filter(
       (n) => n.message.includes("Penalty") || n.message.includes("penalty")
     ).length;
@@ -327,7 +315,6 @@ const App = () => {
       });
     }
 
-    // First purchase achievement
     const purchases = Object.values(inventory).length;
     if (purchases > 0 && !achievements.some((a) => a.id === "first_purchase")) {
       addAchievement({
@@ -342,7 +329,6 @@ const App = () => {
       });
     }
 
-    // Quest completion achievements
     const mainQuestsCompleted = quests.filter(
       (q) => q.type === "main" && q.status === "completed"
     ).length;
@@ -364,7 +350,6 @@ const App = () => {
     }
   };
 
-  // Show level up effect
   const showLevelUpAnimation = (newLevelValue) => {
     setNewLevel(newLevelValue);
     setShowLevelUp(true);
@@ -409,7 +394,6 @@ const App = () => {
     questsRef.current = quests;
   }, [quests]);
 
-  // Add badge with timeout
   const addBadge = (badge, duration = 5000) => {
     const newBadges = [...badges, badge];
     setBadges(newBadges);
@@ -439,7 +423,6 @@ const App = () => {
     achievements: "Achievements",
   };
 
-  // Load state from IndexedDB
   useEffect(() => {
     const loadState = async () => {
       try {
@@ -524,11 +507,9 @@ const App = () => {
         });
         setInventory(invData);
 
-        // Load notifications and achievements
         setNotifications(notificationsData);
         setAchievements(achievementsData);
 
-        // Count unread notifications
         const unread = notificationsData.filter((n) => !n.read).length;
         setUnreadNotifications(unread);
       } catch (error) {
@@ -540,21 +521,18 @@ const App = () => {
     loadState();
   }, [maxHp, maxMana]);
 
-  // Regenerate HP and Mana hourly with conditions
   useEffect(() => {
     const regenerate = () => {
-      if (isPenaltyActive) return; // No regeneration during penalty
-      if (hp <= 0 || mana <= 0) return; // No regeneration at minimum
+      if (isPenaltyActive) return;
+      if (hp <= 0 || mana <= 0) return;
       if (hp < maxHp || mana < maxMana) {
         const now = new Date();
         const hour = (now.getUTCHours() + 4) % 24;
         const baseRate = 0.01;
         let regenRate = baseRate;
 
-        // Nighttime bonus (8pm-6am)
         if (hour >= 20 || hour < 6) regenRate = baseRate * 2;
 
-        // Critical low bonus
         if (hp < maxHp * 0.3 || mana < maxMana * 0.3) regenRate *= 1.5;
 
         setHp((prev) => Math.min(prev + maxHp * regenRate, maxHp));
@@ -562,11 +540,10 @@ const App = () => {
       }
     };
 
-    const interval = setInterval(regenerate, 3600000); // Every hour
+    const interval = setInterval(regenerate, 3600000);
     return () => clearInterval(interval);
   }, [hp, maxHp, mana, maxMana, isPenaltyActive]);
 
-  // Check quest deadlines every minute
   useEffect(() => {
     const checkDeadlines = () => {
       const now = new Date().toISOString();
@@ -595,7 +572,6 @@ const App = () => {
     return () => clearInterval(interval);
   }, []);
 
-  // Check penalty status
   useEffect(() => {
     const checkPenalty = async () => {
       const now = new Date().toISOString();
@@ -606,17 +582,16 @@ const App = () => {
       setIsPenaltyActive(activePenalties.length > 0);
       if (activePenalties.length > 0) {
         setCurrentPenalty(activePenalties[0]);
-        setShowPenaltyModal(true); // Show modal on load if penalty active
+        setShowPenaltyModal(true);
       } else {
         setCurrentPenalty(null);
       }
     };
     checkPenalty();
-    const interval = setInterval(checkPenalty, 60000); // Check every minute
+    const interval = setInterval(checkPenalty, 60000);
     return () => clearInterval(interval);
   }, []);
 
-  // Complete penalty task
   const completePenaltyTask = async (penaltyId, taskIndex) => {
     const penalty = await db.penalties.get(penaltyId);
     if (penalty) {
@@ -628,13 +603,11 @@ const App = () => {
     }
   };
 
-  // Update apology
   const updateApology = async (penaltyId, apology) => {
     await db.penalties.update(penaltyId, { apology });
     setCurrentPenalty((prev) => ({ ...prev, apology }));
   };
 
-  // Initialize particles.js
   useEffect(() => {
     if (!loading && particlesContainerRef.current) {
       window.particlesJS("particles-js", {
@@ -678,7 +651,6 @@ const App = () => {
     }
   }, [loading]);
 
-  // Auto-save player state
   useEffect(() => {
     if (loading) return;
     db.gameState
@@ -712,7 +684,6 @@ const App = () => {
     loading,
   ]);
 
-  // Auto-save quests
   useEffect(() => {
     if (loading) return;
     db.quests
@@ -720,7 +691,6 @@ const App = () => {
       .catch((e) => console.error("Error updating quests:", e));
   }, [quests, loading]);
 
-  // Auto-save inventory
   useEffect(() => {
     if (loading) return;
     db.inventory
@@ -728,7 +698,6 @@ const App = () => {
       .catch((e) => console.error("Error updating inventory:", e));
   }, [inventory, loading]);
 
-  // Auto-save notifications
   useEffect(() => {
     if (loading) return;
     db.notifications
@@ -736,7 +705,6 @@ const App = () => {
       .catch((e) => console.error("Error updating notifications:", e));
   }, [notifications, loading]);
 
-  // Auto-save achievements
   useEffect(() => {
     if (loading) return;
     db.achievements
@@ -744,18 +712,16 @@ const App = () => {
       .catch((e) => console.error("Error updating achievements:", e));
   }, [achievements, loading]);
 
-  // Check achievements when state changes
   useEffect(() => {
     if (!loading) {
       checkAchievements();
     }
   }, [level, quests, inventory, notifications, loading]);
 
-  // Check if a quest can be started (dependencies & level & penalty restriction)
   const canStartQuest = (quest) => {
-    if (hp <= 0 || mana <= 0) return false; // Restrict starting quests at minimum HP/Mana
+    if (hp <= 0 || mana <= 0) return false;
     if (isPenaltyActive && quest.type === "daily" && quest.repeatable)
-      return false; // Restrict Every Day Quests during penalty
+      return false;
     if (!quest.dependencies || quest.dependencies.length === 0) return true;
     if (quest.requiredLevel && level < quest.requiredLevel) return false;
 
@@ -765,7 +731,6 @@ const App = () => {
     });
   };
 
-  // Start quest with deadline handling for 24h quests
   const startQuest = async (id) => {
     const quest = quests.find((q) => q.id === id);
     if (!quest || quest.status !== "not_started") return;
@@ -773,7 +738,6 @@ const App = () => {
 
     let newDeadline = quest.deadline;
 
-    // Handle 24-hour quests
     if (quest.is24Hour) {
       const now = new Date();
       const deadlineDate = new Date(now.getTime() + 24 * 60 * 60 * 1000);
@@ -789,15 +753,12 @@ const App = () => {
     addNotification(`Quest started: "${quest.name}"`, "quest");
   };
 
-  // Complete quest with resource and reward calculations
-  // In App.jsx, update the completeQuest function
   const completeQuest = async (id) => {
     const quest = quests.find((q) => q.id === id);
     if (!quest) return;
     if (quest.status === "completed" || quest.status === "failed") return;
     if (!canStartQuest(quest)) return;
 
-    // Calculate resource costs based on quest difficulty
     let hpCost =
       quest.type === "main" ? 20 : quest.type === "challenge" ? 30 : 5;
     let manaCost = quest.difficulty === "hard" ? 15 : 5;
@@ -810,17 +771,14 @@ const App = () => {
       manaCost = Math.floor(manaCost * 1.35);
     }
 
-    // Check resources before deducting
     if (hp < hpCost || mana < manaCost) {
       addNotification("Not enough HP or Mana to complete the quest", "warning");
       return;
     }
 
-    // Deduct resources first
     setHp((prev) => Math.max(0, prev - hpCost));
     setMana((prev) => Math.max(0, prev - manaCost));
 
-    // Then calculate and apply rewards
     let baseXP =
       quest.xp ||
       (quest.type === "main" ? 1000 : quest.type === "challenge" ? 1500 : 30);
@@ -837,7 +795,7 @@ const App = () => {
     }
 
     if (isPenaltyActive) {
-      baseXP = Math.floor(baseXP * 0.8); // Reduce XP by 20% during penalty
+      baseXP = Math.floor(baseXP * 0.8);
     }
 
     let newXp = xp + Math.floor(baseXP);
@@ -850,10 +808,9 @@ const App = () => {
       newMaxXP = Math.floor(newMaxXP * 1.18);
       setMaxHp((prev) => Math.floor(prev * 1.1));
       setMaxMana((prev) => Math.floor(prev * 1.1));
-      setHp(maxHp); // Max HP on level up
-      setMana(maxMana); // Max Mana on level up
+      setHp(maxHp);
+      setMana(maxMana);
 
-      // Show level up animation for each level gained
       showLevelUpAnimation(newLevel);
       addNotification(`Level up! Reached level ${newLevel}`, "level");
     }
@@ -863,7 +820,6 @@ const App = () => {
     setMaxXP(newMaxXP);
     setCoins((prev) => prev + Math.floor(baseCoins));
 
-    // Update quest status and add completion timestamp
     setQuests(
       quests.map((q) =>
         q.id === id
@@ -872,7 +828,7 @@ const App = () => {
               status: quest.repeatable ? "not_started" : "completed",
               completionTimestamp: quest.repeatable
                 ? null
-                : new Date().toISOString(), // Add timestamp only for non-repeatable quests
+                : new Date().toISOString(),
             }
           : q
       )
@@ -886,7 +842,6 @@ const App = () => {
     );
   };
 
-  // Complete subquest logic
   const completeSubquest = async (parentId, subId) => {
     const parent = quests.find((q) => q.id === parentId);
     if (!parent || !parent.subquests) return;
@@ -916,7 +871,6 @@ const App = () => {
     addNotification(`Subquest completed: "${sub.name}"! +20 coins`, "success");
   };
 
-  // Open quest creation modal, enforcing daily quest limit
   const openQuestForm = (type) => {
     if (
       type === "daily" &&
@@ -929,13 +883,11 @@ const App = () => {
     setShowQuestModal(true);
   };
 
-  // Open subquest modal for parent quest
   const openSubquestForm = (parentId) => {
     setCurrentSubquestParentId(parentId);
     setShowSubquestModal(true);
   };
 
-  // Buying an item logic with unique inventory keys
   const buyItem = async (id) => {
     const item = shopItems.find((i) => i.id === id);
     if (!item || coins < item.cost) {
@@ -945,7 +897,6 @@ const App = () => {
 
     setCoins((prev) => prev - item.cost);
 
-    // Create unique key by id + timestamp to allow multiple stacks
     const itemKey = `item_${item.id}_${Date.now()}`;
 
     let effectFn = () => {};
@@ -981,7 +932,6 @@ const App = () => {
     addNotification(`Purchased: ${item.name}`, "shop");
   };
 
-  // Applying an item effect and adjusting inventory count
   const applyItem = async (id) => {
     const item = inventory[id];
     if (!item || item.count <= 0) {
@@ -1000,7 +950,6 @@ const App = () => {
       addBadge("REST", 5000);
     }
 
-    // Remove or decrement count
     const newCount = item.count - 1;
     if (newCount <= 0) {
       setInventory((prev) => {
@@ -1015,7 +964,6 @@ const App = () => {
     addNotification(`Used: ${item.name}`, "item");
   };
 
-  // Handling quest confirmation from modal
   const handleQuestConfirm = async ({
     name,
     description,
@@ -1059,7 +1007,6 @@ const App = () => {
     addNotification(`New quest created: "${name}"`, "quest");
   };
 
-  // Handling subquest confirmation from modal
   const handleSubquestConfirm = async ({ name, description }) => {
     if (!name) {
       addNotification("Subquest name not provided", "warning");
@@ -1089,14 +1036,13 @@ const App = () => {
     addNotification(`Subquest added to "${parent.name}": ${name}`, "quest");
   };
 
-  // Render content depending on active tab
   const renderTabContent = () => {
     switch (activeTab) {
       case "notification":
         return (
-          <div className="p-4">
+          <div className="p-4 animate-fade-in">
             <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold text-purple-400">
+              <h2 className="text-xl font-bold text-purple-400 drop-shadow-glow">
                 Notifications
               </h2>
               {unreadNotifications > 0 && (
@@ -1122,7 +1068,7 @@ const App = () => {
                       notification.read
                         ? "bg-gray-800 border-gray-700"
                         : "bg-gray-900 border-purple-500"
-                    }`}
+                    } backdrop-blur-md`}
                   >
                     <div className="flex justify-between">
                       <div className="flex items-start">
@@ -1184,8 +1130,8 @@ const App = () => {
         );
       case "achievements":
         return (
-          <div className="p-4">
-            <h2 className="text-xl font-bold text-purple-400 mb-4">
+          <div className="p-4 animate-fade-in">
+            <h2 className="text-xl font-bold text-purple-400 mb-4 drop-shadow-glow">
               Achievements
             </h2>
 
@@ -1202,7 +1148,7 @@ const App = () => {
                       achievement.type === "positive"
                         ? "border-green-500 bg-green-900/20"
                         : "border-red-500 bg-red-900/20"
-                    }`}
+                    } backdrop-blur-md`}
                   >
                     <div className="flex items-start">
                       <span className="text-2xl mr-3">{achievement.icon}</span>
@@ -1240,7 +1186,7 @@ const App = () => {
       <div className="container mx-auto p-4 max-w-2xl relative z-10">
         {loading ? (
           <div className="flex items-center justify-center min-h-[90vh]">
-            <div className="backdrop-blur-md bg-white/10 border border-white/20 rounded-xl p-8 shadow-xl max-w-xs w-full flex flex-col items-center">
+            <div className="backdrop-blur-xl bg-gradient-to-b from-gray-900/50 to-gray-800/50 border border-white/10 rounded-xl p-8 shadow-2xl max-w-xs w-full flex flex-col items-center animate-pop-in">
               <div className="animate-pulse">
                 <svg
                   className="w-14 h-14 text-purple-300 drop-shadow-glow"
@@ -1296,7 +1242,7 @@ const App = () => {
               isPenaltyActive={isPenaltyActive}
               showPenaltyDetails={() => setShowPenaltyModal(true)}
             />
-            <div className="mb-6 bg-gray-800 rounded-lg pt-2 px-1">
+            <div className="mb-6 bg-gray-800 bg-opacity-50 rounded-lg pt-2 px-1 backdrop-blur-md border border-white/10">
               {Object.entries(tabNames).map(([key, name]) => (
                 <button
                   key={key}
@@ -1347,8 +1293,8 @@ const App = () => {
                   className="absolute inset-0 bg-black bg-opacity-70 backdrop-blur-md"
                   onClick={() => setShowPenaltyModal(false)}
                 ></div>
-                <div className="relative bg-gray-800 rounded-lg p-6 max-w-md w-full">
-                  <h2 className="text-2xl font-bold text-red-400 mb-4">
+                <div className="relative bg-gray-800 bg-opacity-50 rounded-lg p-6 max-w-md w-full backdrop-blur-xl border border-white/10">
+                  <h2 className="text-2xl font-bold text-red-400 mb-4 drop-shadow-glow">
                     Penalty Details
                   </h2>
                   <p className="text-gray-300 mb-4">

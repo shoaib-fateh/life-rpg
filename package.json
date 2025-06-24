@@ -17,6 +17,7 @@
     "dexie": "^4.0.11",
     "dexie-react-hooks": "^1.1.7",
     "firebase": "^11.9.1",
+    "gsap": "^3.13.0",
     "lodash": "^4.17.21",
     "particles.js": "^2.0.0",
     "react": "^19.1.0",
