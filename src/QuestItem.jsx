@@ -16,6 +16,9 @@ const QuestItem = ({
 }) => {
   const requiredLevel = quest.levelRequired || 1;
   const canStart = userLevel >= requiredLevel;
+  console.log("userLevel", userLevel);
+  console.log("requiredLevel", requiredLevel);
+  
   const isStarted = quest.status === "in_progress";
   const isCompleted = quest.status === "completed";
 
@@ -78,7 +81,7 @@ const QuestItem = ({
         <p className="text-gray-300 text-sm mb-3">{quest.description}</p>
       )}
 
-      <div className="flex justify-between items-center mb-3">
+      <div className="flex justify-start items-center mb-3">
         <span className="text-yellow-400 text-sm flex items-center">
           🪙 {quest.coins || 0}
         </span>
@@ -129,7 +132,7 @@ const QuestItem = ({
       )}
 
       {!isCompleted && (
-        <div className={`absolute -bottom-2 -right-2 text-xs px-2 py-1 rounded-full shadow z-10 transition-opacity duration-300 ${
+        <div className={`absolute bottom-2 right-2 text-xs px-2 py-1 rounded-full shadow z-10 transition-opacity duration-300 ${
           canStart ? "bg-green-600/90 text-white" : "bg-red-600/90 text-white"
         }`}>
           {canStart

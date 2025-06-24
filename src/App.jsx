@@ -1124,6 +1124,7 @@ const App = () => {
             completeQuest={completeQuest}
             completeSubquest={completeSubquest}
             startQuest={startQuest}
+            userLevel={level}
             canStartQuest={canStartQuest}
             addNotification={addNotification}
           />
@@ -1242,6 +1243,22 @@ const App = () => {
               isPenaltyActive={isPenaltyActive}
               showPenaltyDetails={() => setShowPenaltyModal(true)}
             />
+
+            {Object.entries(tabNames).map(([key, name]) => (
+              <button
+                key={key}
+                onClick={() => setActiveTab(key)}
+                className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${
+                  activeTab === key
+                    ? "bg-gray-700 text-white"
+                    : "text-gray-400 hover:text-gray-200"
+                }`}
+              >
+                {name}
+              </button>
+            ))}
+            <div className="px-2 py-4">{renderTabContent()}</div>
+
             <Charts
               xp={xp}
               maxXP={maxXP}
@@ -1251,22 +1268,6 @@ const App = () => {
               maxMana={maxMana}
               completedQuests={quests.filter((q) => q.status === "completed")}
             />
-            <div className="mb-6 bg-gray-800 bg-opacity-50 rounded-lg pt-2 px-1 backdrop-blur-md border border-white/10">
-              {Object.entries(tabNames).map(([key, name]) => (
-                <button
-                  key={key}
-                  onClick={() => setActiveTab(key)}
-                  className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${
-                    activeTab === key
-                      ? "bg-gray-700 text-white"
-                      : "text-gray-400 hover:text-gray-200"
-                  }`}
-                >
-                  {name}
-                </button>
-              ))}
-              <div className="px-2 py-4">{renderTabContent()}</div>
-            </div>
             <Journal />
             <Modals
               showQuestModal={showQuestModal}

@@ -400,7 +400,7 @@ const Quests = ({
                               .toString()
                               .padStart(2, "0")}
                           </div>
-                          <div className="text-xs text-gray-400">HOURS</div>
+                          <div className="text-xs text-gray-400">HRS</div>
                         </div>
                       )}
                     </CountdownCircleTimer>
@@ -429,7 +429,7 @@ const Quests = ({
                               .toString()
                               .padStart(2, "0")}
                           </div>
-                          <div className="text-xs text-gray-400">MINUTES</div>
+                          <div className="text-xs text-gray-400">MIN</div>
                         </div>
                       )}
                     </CountdownCircleTimer>
@@ -456,7 +456,7 @@ const Quests = ({
                           <div className="text-base font-bold text-green-400">
                             {remainingTime.toString().padStart(2, "0")}
                           </div>
-                          <div className="text-xs text-gray-400">SECONDS</div>
+                          <div className="text-xs text-gray-400">SEC</div>
                         </div>
                       )}
                     </CountdownCircleTimer>
