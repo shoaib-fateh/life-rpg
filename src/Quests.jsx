@@ -4,6 +4,8 @@ import CustomButton from "./CustomButton";
 import Modals from "./Modals";
 import { CountdownCircleTimer } from "react-countdown-circle-timer";
 import { gsap } from "gsap";
+import QuestItem from "./QuestItem";
+import CountdownTimer from "./CountdownTimer";
 
 // Initialize Dexie DB
 const db = new Dexie("life_rpg");
@@ -12,93 +14,18 @@ db.version(1).stores({
   quests: "id",
 });
 
-// --- CountdownTimer Component ---
-const CountdownTimer = ({
-  deadline,
-  onExpire,
-  onWarning,
-  addNotification,
-  questName,
-  warningSent,
-  onWarningSent,
-}) => {
-  const [timeLeft, setTimeLeft] = useState(() => {
-    const diff = new Date(deadline) - Date.now();
-    return diff > 0 ? diff : 0;
-  });
-  const [warned, setWarned] = useState(false);
-  const timerRef = useRef(null);
-
-  useEffect(() => {
-    if (timeLeft <= 0) {
-      onExpire();
-      return;
-    }
-    if (!warned && !warningSent && timeLeft <= 4 * 60 * 60 * 1000) {
-      setWarned(true);
-      onWarning();
-      addNotification(
-        `Only 4 hours left to complete "${questName}"!`,
-        "warning"
-      );
-      onWarningSent();
-    }
-
-    timerRef.current = setInterval(() => {
-      const diff = new Date(deadline) - Date.now();
-      if (diff <= 0) {
-        setTimeLeft(0);
-        clearInterval(timerRef.current);
-        onExpire();
-      } else {
-        setTimeLeft(diff);
-      }
-    }, 1000);
-
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
-  }, [
-    timeLeft,
-    deadline,
-    onExpire,
-    onWarning,
-    warned,
-    addNotification,
-    questName,
-    warningSent,
-    onWarningSent,
-  ]);
-
-  const formatTime = (ms) => {
-    const totalSeconds = Math.floor(ms / 1000);
-    const h = Math.floor(totalSeconds / 3600);
-    const m = Math.floor((totalSeconds % 3600) / 60);
-    const s = totalSeconds % 60;
-
-    const pad = (num) => String(num).padStart(2, "0");
-    return `${pad(h)}h ${pad(m)}m ${pad(s)}s`;
-  };
-
-  return (
-    <span className="font-mono text-red-400 drop-shadow-glow">
-      {formatTime(timeLeft)}
-    </span>
-  );
-};
-
 // --- InfoPopup Component ---
 const InfoPopup = ({ message, onClose }) => {
   const popupRef = useRef(null);
 
   useEffect(() => {
     if (!message) return;
-    
+
     gsap.from(popupRef.current, {
       y: 20,
       opacity: 0,
       duration: 0.5,
-      ease: "back.out(1.7)"
+      ease: "back.out(1.7)",
     });
 
     const timeout = setTimeout(onClose, 6000);
@@ -108,7 +35,7 @@ const InfoPopup = ({ message, onClose }) => {
   if (!message) return null;
 
   return (
-    <div 
+    <div
       ref={popupRef}
       className="fixed bottom-5 right-5 bg-gradient-to-r from-yellow-400 to-yellow-500 text-black px-5 py-3 rounded-xl shadow-2xl z-50 max-w-xs border-2 border-white/20"
     >
@@ -116,7 +43,7 @@ const InfoPopup = ({ message, onClose }) => {
         <div className="flex items-center">
           <span className="text-xl mr-2">⚠️</span>
           <div>
-            <strong className="text-black">Warning: </strong> 
+            <strong className="text-black">Warning: </strong>
             <span className="text-gray-900">{message}</span>
           </div>
         </div>
@@ -152,7 +79,7 @@ const Quests = ({
   const [infoMessage, setInfoMessage] = useState(null);
   const [activeTab, setActiveTab] = useState("everyDay");
   const questsContainerRef = useRef(null);
-  
+
   const timerRefs = useRef({});
 
   // Calculate time until daily reset
@@ -182,10 +109,14 @@ const Quests = ({
   // Difficulty Emoji helper
   const getDifficultyEmoji = (difficulty) => {
     switch ((difficulty || "").toLowerCase()) {
-      case "easy": return "🟢";
-      case "medium": return "🟡";
-      case "hard": return "🔴";
-      default: return "⚪️";
+      case "easy":
+        return "🟢";
+      case "medium":
+        return "🟡";
+      case "hard":
+        return "🔴";
+      default:
+        return "⚪️";
     }
   };
 
@@ -197,23 +128,27 @@ const Quests = ({
 
     try {
       // Animate the quest card
-      const questElement = document.querySelector(`[data-quest-id="${questId}"]`);
+      const questElement = document.querySelector(
+        `[data-quest-id="${questId}"]`
+      );
       if (questElement) {
         gsap.to(questElement, {
           scale: 0.95,
           backgroundColor: "#4B5563",
           duration: 0.3,
           yoyo: true,
-          repeat: 1
+          repeat: 1,
         });
       }
 
       await db.quests.update(questId, { status: "in_progress" });
-      
-      setQuests(prev => prev.map(q => 
-        q.id === questId ? { ...q, status: "in_progress" } : q
-      ));
-      
+
+      setQuests((prev) =>
+        prev.map((q) =>
+          q.id === questId ? { ...q, status: "in_progress" } : q
+        )
+      );
+
       addNotification(`🚀 Quest started: "${quest.name}"`, "quest");
     } catch (err) {
       console.error("Failed to start quest:", err);
@@ -228,7 +163,9 @@ const Quests = ({
 
     try {
       // Celebration animation
-      const questElement = document.querySelector(`[data-quest-id="${questId}"]`);
+      const questElement = document.querySelector(
+        `[data-quest-id="${questId}"]`
+      );
       if (questElement) {
         gsap.to(questElement, {
           scale: 1.05,
@@ -238,15 +175,15 @@ const Quests = ({
           repeat: 1,
           onComplete: () => {
             gsap.to(questElement, { opacity: 0, duration: 0.5 });
-          }
+          },
         });
       }
 
       await completeQuest(questId);
-      
-      setQuests(prev => prev.map(q => 
-        q.id === questId ? { ...q, status: "completed" } : q
-      ));
+
+      setQuests((prev) =>
+        prev.map((q) => (q.id === questId ? { ...q, status: "completed" } : q))
+      );
     } catch (err) {
       console.error("Failed to complete quest:", err);
       addNotification(`❌ Failed to complete quest: "${quest.name}"`, "error");
@@ -256,7 +193,7 @@ const Quests = ({
   // Enhanced penalty function
   const applyPenaltyAndResetQuest = useCallback(
     async (questId) => {
-      const quest = quests.find(q => q.id === questId);
+      const quest = quests.find((q) => q.id === questId);
       if (!quest) return;
 
       try {
@@ -269,22 +206,28 @@ const Quests = ({
 
         await db.gameState.put({ ...ps, hp, mana, coins });
 
-        const newDeadline = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
-        
+        const newDeadline = new Date(
+          Date.now() + 24 * 60 * 60 * 1000
+        ).toISOString();
+
         await db.quests.update(questId, {
           status: "not_started",
           deadline: newDeadline,
           warningSentForCurrentPeriod: false,
         });
 
-        setQuests(prev => prev.map(q => 
-          q.id === questId ? { 
-            ...q, 
-            status: "not_started", 
-            deadline: newDeadline,
-            warningSentForCurrentPeriod: false
-          } : q
-        ));
+        setQuests((prev) =>
+          prev.map((q) =>
+            q.id === questId
+              ? {
+                  ...q,
+                  status: "not_started",
+                  deadline: newDeadline,
+                  warningSentForCurrentPeriod: false,
+                }
+              : q
+          )
+        );
 
         addNotification(
           `💀 Quest "${quest.name}" expired! Penalties applied:\n- 85% HP/Mana loss\n- 15% Coins lost`,
@@ -300,14 +243,14 @@ const Quests = ({
   // Reset all daily quests
   const resetEveryDayQuests = async () => {
     const everyDayQuests = quests.filter(
-      q => q.type === "daily" && q.repeatable && q.status !== "completed"
+      (q) => q.type === "daily" && q.repeatable && q.status !== "completed"
     );
-    
+
     if (everyDayQuests.length > 0) {
       try {
         const ps = await db.gameState.get("playerState");
         let { hp, maxHp, mana, maxMana, coins } = ps;
-        
+
         // Apply penalties
         hp = Math.max(0, hp - Math.floor(maxHp * 0.85));
         mana = Math.max(0, mana - Math.floor(maxMana * 0.85));
@@ -318,25 +261,29 @@ const Quests = ({
         const newDeadline = new Date();
         newDeadline.setDate(newDeadline.getDate() + 1);
         newDeadline.setHours(0, 0, 0, 0);
-        
-        const updates = everyDayQuests.map(q => 
+
+        const updates = everyDayQuests.map((q) =>
           db.quests.update(q.id, {
             status: "not_started",
             deadline: newDeadline.toISOString(),
             warningSentForCurrentPeriod: false,
           })
         );
-        
+
         await Promise.all(updates);
-        
-        setQuests(prev => prev.map(q => 
-          everyDayQuests.some(eq => eq.id === q.id) ? { 
-            ...q, 
-            status: "not_started",
-            deadline: newDeadline.toISOString(),
-            warningSentForCurrentPeriod: false
-          } : q
-        ));
+
+        setQuests((prev) =>
+          prev.map((q) =>
+            everyDayQuests.some((eq) => eq.id === q.id)
+              ? {
+                  ...q,
+                  status: "not_started",
+                  deadline: newDeadline.toISOString(),
+                  warningSentForCurrentPeriod: false,
+                }
+              : q
+          )
+        );
 
         addNotification(
           `🔄 Daily quests reset! Penalties applied for incomplete quests.`,
@@ -351,16 +298,20 @@ const Quests = ({
   // Group quests by category
   const questsByCategory = {
     everyDay: quests
-      .filter(q => q.type === "daily" && q.repeatable && q.status !== "completed")
+      .filter(
+        (q) => q.type === "daily" && q.repeatable && q.status !== "completed"
+      )
       .sort((a, b) => b.priority - a.priority),
     daily: quests
-      .filter(q => q.type === "daily" && !q.repeatable && q.status !== "completed")
+      .filter(
+        (q) => q.type === "daily" && !q.repeatable && q.status !== "completed"
+      )
       .sort((a, b) => b.priority - a.priority),
     subquest: quests
-      .filter(q => q.type === "subquest" && q.status !== "completed")
+      .filter((q) => q.type === "subquest" && q.status !== "completed")
       .sort((a, b) => b.priority - a.priority),
     main: quests
-      .filter(q => q.type === "main" && q.status !== "completed")
+      .filter((q) => q.type === "main" && q.status !== "completed")
       .sort((a, b) => b.priority - a.priority),
   };
 
@@ -370,126 +321,6 @@ const Quests = ({
     { key: "subquest", label: "🧩 Sub Quests" },
     { key: "main", label: "🏆 Main Quests" },
   ];
-
-  // Render each quest item
-  const renderQuest = (quest) => {
-    const requiredLevel = quest.levelRequired || 1;
-    const canStart = userLevel >= requiredLevel;
-    const isStarted = quest.status === "in_progress";
-    const isCompleted = quest.status === "completed";
-
-    if (isCompleted) return null;
-
-    // Calculate time left for active quests
-    let timeLeft = null;
-    if (quest.deadline && isStarted && activeTab !== "everyDay") {
-      const diff = new Date(quest.deadline) - new Date();
-      if (diff > 0) {
-        timeLeft = (
-          <CountdownTimer
-            deadline={quest.deadline}
-            onExpire={() => applyPenaltyAndResetQuest(quest.id)}
-            onWarning={() => setInfoMessage(`⌛ Only 4 hours left to complete "${quest.name}"!`)}
-            addNotification={addNotification}
-            questName={quest.name}
-            warningSent={quest.warningSentForCurrentPeriod || false}
-            onWarningSent={() =>
-              db.quests.update(quest.id, {
-                warningSentForCurrentPeriod: true,
-              })
-            }
-          />
-        );
-      }
-    }
-
-    return (
-      <div
-        key={quest.id}
-        data-quest-id={quest.id}
-        className={`quest-item bg-gradient-to-br from-gray-800/90 to-gray-700/90 backdrop-blur-lg rounded-xl p-5 mb-4 shadow-xl border border-white/10 hover:border-purple-500/30 transition-all duration-300 ${
-          !canStart && !isCompleted ? "opacity-60" : ""
-        }`}
-      >
-        <div className="flex justify-between items-start">
-          <div>
-            <h3 className="text-xl font-bold text-white">{quest.name}</h3>
-            <p className="text-purple-300/90 uppercase text-xs tracking-wider mb-2">
-              {quest.type} • {getDifficultyEmoji(quest.difficulty)} • {quest.status}
-              {quest.repeatable && " 🔁"}
-            </p>
-          </div>
-          <span className="text-xs bg-black/30 px-2 py-1 rounded-full border border-white/10">
-            Lv. {requiredLevel}
-          </span>
-        </div>
-
-        {quest.description && (
-          <p className="text-gray-300 text-sm mb-3">{quest.description}</p>
-        )}
-
-        <div className="flex justify-between items-center mb-3">
-          <span className="text-yellow-400 text-sm flex items-center">
-            🪙 {quest.coins || 0}
-          </span>
-          <span className="text-green-400 text-sm flex items-center">
-            ⚡ {quest.xp || 0} XP
-          </span>
-        </div>
-
-        {!isCompleted && (
-          <div className="flex justify-between items-center mt-4 flex-wrap gap-2">
-            <div className="flex gap-2">
-              {!isStarted ? (
-                <CustomButton
-                  onClick={() => startQuestHandler(quest.id)}
-                  variant={canStart ? "primary" : "secondary"}
-                  disabled={!canStart}
-                  className="px-4 py-2 text-sm"
-                >
-                  {canStart ? "Start Quest" : "Level Required"}
-                </CustomButton>
-              ) : (
-                <CustomButton
-                  onClick={() => completeQuestHandler(quest.id)}
-                  variant="success"
-                  className="px-4 py-2 text-sm"
-                >
-                  Complete
-                </CustomButton>
-              )}
-              
-              {!isStarted && canStart && (
-                <CustomButton
-                  onClick={() => setEditingQuest(quest)}
-                  variant="secondary"
-                  className="px-4 py-2 text-sm"
-                >
-                  Edit
-                </CustomButton>
-              )}
-            </div>
-
-            {timeLeft && (
-              <div className="bg-black/30 px-3 py-1 rounded-full border border-red-500/20">
-                {timeLeft}
-              </div>
-            )}
-          </div>
-        )}
-
-        {!isCompleted && (
-          <div className={`absolute -bottom-2 -right-2 text-xs px-2 py-1 rounded-full shadow z-10 transition-opacity duration-300 ${
-            canStart ? "bg-green-600/90 text-white" : "bg-red-600/90 text-white"
-          }`}>
-            {canStart
-              ? `✅ Level ${userLevel}`
-              : `🔒 Needs Lv. ${requiredLevel}`}
-          </div>
-        )}
-      </div>
-    );
-  };
 
   return (
     <div className="relative">
@@ -533,7 +364,7 @@ const Quests = ({
         </div>
 
         {/* Tab content */}
-        <div 
+        <div
           ref={questsContainerRef}
           className="p-5 max-h-[500px] overflow-y-auto custom-scrollbar"
         >
@@ -541,7 +372,9 @@ const Quests = ({
           {activeTab === "everyDay" && (
             <div className="mb-6 p-4 bg-gradient-to-r from-purple-900/30 to-blue-900/30 rounded-xl border border-white/10">
               <div className="flex flex-col items-center">
-                <h3 className="text-lg font-bold text-white mb-3">Daily Reset In:</h3>
+                <h3 className="text-lg font-bold text-white mb-3">
+                  Daily Reset In:
+                </h3>
                 <div className="flex justify-center items-center space-x-4">
                   {/* Hours */}
                   <div className="relative">
@@ -563,7 +396,9 @@ const Quests = ({
                       {({ remainingTime }) => (
                         <div className="flex flex-col items-center">
                           <div className="text-xl font-bold text-red-400">
-                            {Math.floor(remainingTime / 3600).toString().padStart(2, "0")}
+                            {Math.floor(remainingTime / 3600)
+                              .toString()
+                              .padStart(2, "0")}
                           </div>
                           <div className="text-xs text-gray-400">HOURS</div>
                         </div>
@@ -577,7 +412,9 @@ const Quests = ({
                       key={`minutes-${Math.floor(resetTimeLeft / 1000)}`}
                       isPlaying
                       duration={3600}
-                      initialRemainingTime={Math.floor((resetTimeLeft / 1000) % 3600)}
+                      initialRemainingTime={Math.floor(
+                        (resetTimeLeft / 1000) % 3600
+                      )}
                       colors={[["#F59E0B"]]}
                       trailColor="#374151"
                       strokeWidth={6}
@@ -588,7 +425,9 @@ const Quests = ({
                       {({ remainingTime }) => (
                         <div className="flex flex-col items-center">
                           <div className="text-lg font-bold text-yellow-400">
-                            {Math.floor(remainingTime / 60).toString().padStart(2, "0")}
+                            {Math.floor(remainingTime / 60)
+                              .toString()
+                              .padStart(2, "0")}
                           </div>
                           <div className="text-xs text-gray-400">MINUTES</div>
                         </div>
@@ -602,7 +441,9 @@ const Quests = ({
                       key={`seconds-${Math.floor(resetTimeLeft / 1000)}`}
                       isPlaying
                       duration={60}
-                      initialRemainingTime={Math.floor((resetTimeLeft / 1000) % 60)}
+                      initialRemainingTime={Math.floor(
+                        (resetTimeLeft / 1000) % 60
+                      )}
                       colors={[["#10B981"]]}
                       trailColor="#374151"
                       strokeWidth={6}
@@ -631,14 +472,32 @@ const Quests = ({
           {/* Quests list */}
           {questsByCategory[activeTab].length > 0 ? (
             <div className="grid gap-4">
-              {questsByCategory[activeTab].map(renderQuest)}
+              {quests
+                .filter((q) => q.type === activeTab)
+                .map((quest) => (
+                  <QuestItem
+                    key={quest.id}
+                    db={db}
+                    quest={quest}
+                    userLevel={userLevel}
+                    activeTab={activeTab}
+                    startQuestHandler={startQuest}
+                    completeQuestHandler={completeQuest}
+                    setEditingQuest={setEditingQuest}
+                    applyPenaltyAndResetQuest={applyPenaltyAndResetQuest}
+                    setInfoMessage={setInfoMessage}
+                    addNotification={addNotification}
+                  />
+                ))}
             </div>
           ) : (
             <div className="text-center py-10">
               <p className="text-gray-400 mb-4">No quests in this category</p>
               <CustomButton
                 onClick={() => {
-                  setCurrentQuestType(activeTab === "everyDay" ? "daily" : activeTab);
+                  setCurrentQuestType(
+                    activeTab === "everyDay" ? "daily" : activeTab
+                  );
                   setEditingQuest(null);
                   setShowQuestModal(true);
                 }}
@@ -660,24 +519,27 @@ const Quests = ({
           currentQuestType={currentQuestType}
           onQuestConfirm={async (questData) => {
             if (!questData.name) return;
-            
+
             try {
               if (editingQuest) {
                 await db.quests.update(editingQuest.id, questData);
-                setQuests(prev => prev.map(q => 
-                  q.id === editingQuest.id ? { ...q, ...questData } : q
-                ));
+                setQuests((prev) =>
+                  prev.map((q) =>
+                    q.id === editingQuest.id ? { ...q, ...questData } : q
+                  )
+                );
               } else {
                 const newQuest = {
                   ...questData,
                   id: Date.now().toString(),
                   status: "not_started",
                   subquests: [],
-                  priority: quests.reduce((max, q) => Math.max(max, q.priority), 0) + 1,
+                  priority:
+                    quests.reduce((max, q) => Math.max(max, q.priority), 0) + 1,
                   warningSentForCurrentPeriod: false,
                 };
                 await db.quests.add(newQuest);
-                setQuests(prev => [...prev, newQuest]);
+                setQuests((prev) => [...prev, newQuest]);
               }
               setShowQuestModal(false);
               setEditingQuest(null);
@@ -697,4 +559,4 @@ const Quests = ({
   );
 };
 
-export default Quests;  
+export default Quests;
