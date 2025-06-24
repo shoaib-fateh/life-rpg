@@ -65,7 +65,7 @@ const Header = ({
   return (
     <header 
       ref={headerRef}
-      className="relative overflow-hidden backdrop-blur-xl bg-gradient-to-b from-gray-900/90 to-gray-800/90 rounded-3xl p-6 mb-8 shadow-2xl border-2 border-white/10 animate-fade-in"
+      className="mt-2 relative overflow-hidden backdrop-blur-xl bg-gradient-to-b from-gray-900/90 to-gray-800/90 rounded-3xl p-6 mb-8 shadow-2xl border-2 border-white/10 animate-fade-in"
     >
       {/* افکت نور پس‌زمینه */}
       <div className="absolute inset-0 overflow-hidden">
@@ -79,7 +79,7 @@ const Header = ({
           <div className="flex flex-col">
             <div className="flex items-center space-x-3 mb-2">
               <h1 className="text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 via-blue-400 to-purple-400 drop-shadow-glow tracking-tight">
-                VOID RPG
+                VOID
               </h1>
               <span className="text-xs px-2 py-1 bg-gradient-to-br from-purple-600/80 to-blue-600/80 rounded-full text-white font-bold border border-white/10 shadow-glow">
                 Lv. {level}

@@ -1,5 +1,5 @@
-import React, { useRef, useEffect, useState } from 'react';
-import { Line } from 'react-chartjs-2';
+import React, { useRef, useEffect, useState } from "react";
+import { Line } from "react-chartjs-2";
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -9,11 +9,10 @@ import {
   PointElement,
   Filler,
   ArcElement,
-} from 'chart.js';
-import ChartDataLabels from 'chartjs-plugin-datalabels';
-import 'chartjs-plugin-gradient';
+} from "chart.js";
+import ChartDataLabels from "chartjs-plugin-datalabels";
+import "chartjs-plugin-gradient";
 
-// ثبت پلاگین‌ها
 ChartJS.register(
   CategoryScale,
   LinearScale,
@@ -25,9 +24,16 @@ ChartJS.register(
   ChartDataLabels
 );
 
-// کامپوننت RadialProgress با اصلاحات
-const RadialProgress = ({ value, maxValue, color, gradientColors, label, pulseRate = 3000 }) => {
+const RadialProgress = ({
+  value,
+  maxValue,
+  color,
+  gradientColors,
+  label,
+  pulseRate = 3000,
+}) => {
   const canvasRef = useRef(null);
+  const chartRef = useRef(null);
   const [isHovered, setIsHovered] = useState(false);
   const [currentValue, setCurrentValue] = useState(0);
 
@@ -57,8 +63,10 @@ const RadialProgress = ({ value, maxValue, color, gradientColors, label, pulseRa
   }, [value]);
 
   useEffect(() => {
-    const ctx = canvasRef.current.getContext('2d');
-    
+    if (!canvasRef.current) return;
+    const ctx = canvasRef.current.getContext("2d");
+    if (!ctx) return;
+
     const gradient = ctx.createRadialGradient(
       canvasRef.current.width / 2,
       canvasRef.current.height / 2,
@@ -71,18 +79,20 @@ const RadialProgress = ({ value, maxValue, color, gradientColors, label, pulseRa
     gradient.addColorStop(0.7, gradientColors[1]);
     gradient.addColorStop(1, gradientColors[2] || gradientColors[1]);
 
-    const chart = new ChartJS(ctx, {
-      type: 'doughnut',
+    chartRef.current = new ChartJS(ctx, {
+      type: "doughnut",
       data: {
-        datasets: [{
-          data: [currentValue, maxValue - currentValue],
-          backgroundColor: [gradient, 'rgba(255, 255, 255, 0.05)'],
-          borderWidth: 0,
-          borderRadius: 12,
-          cutout: '80%',
-          circumference: 360,
-          rotation: 270,
-        }],
+        datasets: [
+          {
+            data: [currentValue, maxValue - currentValue],
+            backgroundColor: [gradient, "rgba(255, 255, 255, 0.05)"],
+            borderWidth: 0,
+            borderRadius: 12,
+            cutout: "80%",
+            circumference: 360,
+            rotation: 270,
+          },
+        ],
       },
       options: {
         responsive: true,
@@ -91,50 +101,66 @@ const RadialProgress = ({ value, maxValue, color, gradientColors, label, pulseRa
           datalabels: { display: false },
           tooltip: { enabled: false },
         },
-        animation: {
-          duration: 2000,
-          easing: 'easeOutElastic',
-        },
+        animation: false,
       },
     });
 
-    const pulse = () => {
-      if (!isHovered) {
-        chart.data.datasets[0].backgroundColor[0] = color;
-        chart.update();
+    const interval = setInterval(() => {
+      if (!isHovered && chartRef.current) {
+        chartRef.current.data.datasets[0].backgroundColor[0] = color;
+        chartRef.current.update();
         setTimeout(() => {
-          chart.data.datasets[0].backgroundColor[0] = gradient;
-          chart.update();
+          chartRef.current.data.datasets[0].backgroundColor[0] = gradient;
+          chartRef.current.update();
         }, 500);
       }
-    };
-    const interval = setInterval(pulse, pulseRate);
+    }, pulseRate);
 
     return () => {
-      chart.destroy();
+      chartRef.current?.destroy();
       clearInterval(interval);
     };
-  }, [currentValue, maxValue, color, gradientColors, isHovered]);
+  }, [maxValue, color, gradientColors, pulseRate]);
+
+  useEffect(() => {
+    if (chartRef.current) {
+      chartRef.current.data.datasets[0].data = [
+        currentValue,
+        maxValue - currentValue,
+      ];
+      chartRef.current.update("none");
+    }
+  }, [currentValue, maxValue]);
 
   return (
-    <div 
+    <div
       className="relative flex flex-col items-center group transition-all duration-300"
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
-      <canvas 
-        ref={canvasRef} 
-        className={`w-28 h-28 transition-all duration-500 ${isHovered ? 'scale-110' : 'scale-100'}`}
+      <canvas
+        ref={canvasRef}
+        className={`w-28 h-28 transition-all duration-500 ${
+          isHovered ? "scale-110" : "scale-100"
+        }`}
       />
       <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-        <span className={`text-2xl font-bold transition-all duration-300 ${isHovered ? 'text-3xl' : 'text-2xl'}`}
+        <span
+          className={`text-2xl font-bold transition-all duration-300 ${
+            isHovered ? "text-3xl" : "text-2xl"
+          }`}
           style={{
             color: color,
-            textShadow: `0 0 10px ${color}, 0 0 20px ${color}`
-          }}>
+            textShadow: `0 0 10px ${color}, 0 0 20px ${color}`,
+          }}
+        >
           {Math.round(currentValue)}
         </span>
-        <span className={`text-xs uppercase tracking-wider transition-all duration-300 ${isHovered ? 'text-sm text-white' : 'text-gray-300'}`}>
+        <span
+          className={`text-xs uppercase tracking-wider transition-all duration-300 ${
+            isHovered ? "text-sm text-white" : "text-gray-300"
+          }`}
+        >
           {label}
         </span>
       </div>
@@ -143,81 +169,100 @@ const RadialProgress = ({ value, maxValue, color, gradientColors, label, pulseRa
           {Math.round(currentValue)} / {maxValue}
         </div>
       )}
-      <div className={`absolute inset-0 rounded-full transition-all duration-500 ${isHovered ? 'opacity-30' : 'opacity-20'}`} 
-        style={{ 
+      <div
+        className={`absolute inset-0 rounded-full transition-all duration-500 ${
+          isHovered ? "opacity-30" : "opacity-20"
+        }`}
+        style={{
           background: color,
-          boxShadow: `0 0 30px ${color}`
-        }} />
+          boxShadow: `0 0 30px ${color}`,
+        }}
+      />
     </div>
   );
 };
 
-const Charts = ({ xp, maxXP, hp, maxHp, mana, maxMana, completedQuests = [] }) => {
+const Charts = ({
+  xp,
+  maxXP,
+  hp,
+  maxHp,
+  mana,
+  maxMana,
+  completedQuests = [],
+}) => {
   const progressChartRef = useRef(null);
   const [hoveredPoint, setHoveredPoint] = useState(null);
 
   const neonPalette = {
     xp: {
-      solid: '#00f0ff',
-      gradient: ['#00f0ff', '#0055ff', '#0022ff'],
-      line: ['#00f0ff', '#0088ff']
+      solid: "#00f0ff",
+      gradient: ["#00f0ff", "#0055ff", "#0022ff"],
+      line: ["#00f0ff", "#0088ff"],
     },
     hp: {
-      solid: '#ff3a3a',
-      gradient: ['#ff0000', '#ff5500', '#ff8800'],
-      line: ['#ff3a3a', '#ff6b6b']
+      solid: "#ff3a3a",
+      gradient: ["#ff0000", "#ff5500", "#ff8800"],
+      line: ["#ff3a3a", "#ff6b6b"],
     },
     mana: {
-      solid: '#ff00ff',
-      gradient: ['#ff00ff', '#aa00ff', '#7700ff'],
-      line: ['#ff00ff', '#cc44ff']
-    }
+      solid: "#ff00ff",
+      gradient: ["#ff00ff", "#aa00ff", "#7700ff"],
+      line: ["#ff00ff", "#cc44ff"],
+    },
   };
 
-  // تابع اصلاح شده createGlassGradient
   const createGlassGradient = (ctx, colors) => {
     const gradient = ctx.createLinearGradient(0, 0, 0, ctx.canvas.height);
-    
-    // تبدیل رنگ‌ها به فرمت صحیح
-    const color1 = colors[0].startsWith('rgba') ? colors[0] : `${colors[0]}ff`;
-    const color2 = colors[1].startsWith('rgba') ? colors[1] : `${colors[1]}ff`;
-    
+
+    const color1 = colors[0].startsWith("rgba") ? colors[0] : `${colors[0]}ff`;
+    const color2 = colors[1].startsWith("rgba") ? colors[1] : `${colors[1]}ff`;
+
     gradient.addColorStop(0, color1);
     gradient.addColorStop(0.5, color2);
     gradient.addColorStop(1, color1);
     return gradient;
   };
 
-  const sortedQuests = [...completedQuests].sort((a, b) =>
-    new Date(a.completionTimestamp || 0) - new Date(b.completionTimestamp || 0)
+  const sortedQuests = [...completedQuests].sort(
+    (a, b) =>
+      new Date(a.completionTimestamp || 0) -
+      new Date(b.completionTimestamp || 0)
   );
-  
-  const cumulativeXP = sortedQuests.reduce((acc, quest) => {
-    const last = acc.length ? acc[acc.length - 1] : 0;
-    return [...acc, last + (quest.xp || 0)];
-  }, [0]);
+
+  const cumulativeXP = sortedQuests.reduce(
+    (acc, quest) => {
+      const last = acc.length ? acc[acc.length - 1] : 0;
+      return [...acc, last + (quest.xp || 0)];
+    },
+    [0]
+  );
 
   const progressChartData = {
     labels: sortedQuests.map((_, i) => `Quest ${i + 1}`),
-    datasets: [{
-      label: 'Cumulative XP',
-      data: cumulativeXP,
-      fill: true,
-      borderColor: (ctx) => createGlassGradient(ctx.chart.ctx, neonPalette.xp.line),
-      backgroundColor: (ctx) => createGlassGradient(ctx.chart.ctx, [
-        'rgba(0, 240, 255, 0.2)',
-        'rgba(0, 136, 255, 0.4)'
-      ]),
-      borderWidth: 4,
-      pointRadius: 0,
-      pointHoverRadius: 8,
-      pointBackgroundColor: neonPalette.xp.solid,
-      pointHoverBackgroundColor: '#ffffff',
-      pointBorderWidth: 2,
-      pointHoverBorderWidth: 3,
-      pointHoverBorderColor: neonPalette.xp.solid,
-      tension: 0.4,
-    }],
+    datasets: [
+      {
+        label: "Cumulative XP",
+        data: cumulativeXP,
+        fill: true,
+        borderColor: (ctx) =>
+          createGlassGradient(ctx.chart.ctx, neonPalette.xp.line),
+        backgroundColor: (ctx) =>
+          createGlassGradient(ctx.chart.ctx, [
+            "rgba(0, 240, 255, 0.2)",
+            "rgba(0, 136, 255, 0.4)",
+          ]),
+        borderWidth: 4,
+        pointRadius: 0,
+        pointHoverRadius: 8,
+        pointBackgroundColor: neonPalette.xp.solid,
+        pointHoverBackgroundColor: "#ffffff",
+        pointBorderWidth: 2,
+        pointHoverBorderWidth: 3,
+        pointHoverBorderColor: neonPalette.xp.solid,
+        tension: 0.4,
+      },
+    ],
   };
 
   return (
@@ -253,7 +298,7 @@ const Charts = ({ xp, maxXP, hp, maxHp, mana, maxMana, completedQuests = [] }) =
         <h3 className="text-xl font-bold text-center mb-4 text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-400 tracking-wider uppercase text-glow">
           Quest Journey
         </h3>
-        
+
         {sortedQuests.length > 0 ? (
           <div className="relative h-64">
             <Line
@@ -265,24 +310,24 @@ const Charts = ({ xp, maxXP, hp, maxHp, mana, maxMana, completedQuests = [] }) =
                 scales: {
                   y: {
                     beginAtZero: true,
-                    grid: { 
-                      color: 'rgba(255, 255, 255, 0.05)',
-                      borderDash: [5, 5]
+                    grid: {
+                      color: "rgba(255, 255, 255, 0.05)",
+                      borderDash: [5, 5],
                     },
-                    ticks: { 
-                      color: '#ffffff90',
+                    ticks: {
+                      color: "#ffffff90",
                       font: { size: 12 },
-                      callback: (value) => `${value} XP`
+                      callback: (value) => `${value} XP`,
                     },
                     border: { display: false },
                   },
                   x: {
                     grid: { display: false },
-                    ticks: { 
-                      color: '#ffffff60',
+                    ticks: {
+                      color: "#ffffff60",
                       font: { size: 10 },
                       maxRotation: 45,
-                      minRotation: 45
+                      minRotation: 45,
                     },
                     border: { display: false },
                   },
@@ -291,9 +336,9 @@ const Charts = ({ xp, maxXP, hp, maxHp, mana, maxMana, completedQuests = [] }) =
                   legend: { display: false },
                   tooltip: {
                     enabled: true,
-                    backgroundColor: 'rgba(0, 0, 0, 0.9)',
+                    backgroundColor: "rgba(0, 0, 0, 0.9)",
                     titleColor: neonPalette.xp.solid,
-                    bodyColor: '#fff',
+                    bodyColor: "#fff",
                     borderColor: neonPalette.xp.solid,
                     borderWidth: 1,
                     padding: 12,
@@ -303,23 +348,24 @@ const Charts = ({ xp, maxXP, hp, maxHp, mana, maxMana, completedQuests = [] }) =
                       title: (items) => `Quest ${items[0].dataIndex + 1}`,
                       label: (context) => {
                         const currentXP = context.raw;
-                        const prevXP = context.dataset.data[context.dataIndex - 1] || 0;
+                        const prevXP =
+                          context.dataset.data[context.dataIndex - 1] || 0;
                         const gained = currentXP - prevXP;
                         return [
                           `Total: ${currentXP} XP`,
-                          gained > 0 ? `Gained: +${gained} XP` : ''
+                          gained > 0 ? `Gained: +${gained} XP` : "",
                         ];
-                      }
-                    }
+                      },
+                    },
                   },
                 },
                 interaction: {
                   intersect: false,
-                  mode: 'index',
+                  mode: "index",
                 },
                 animation: {
                   duration: 2000,
-                  easing: 'easeOutElastic',
+                  easing: "easeOutElastic",
                   onProgress: (animation) => {
                     const chart = animation.chart;
                     const ctx = chart.ctx;
@@ -331,9 +377,9 @@ const Charts = ({ xp, maxXP, hp, maxHp, mana, maxMana, completedQuests = [] }) =
                   },
                 },
                 elements: {
-                  line: { 
-                    borderCapStyle: 'round',
-                    borderJoinStyle: 'round'
+                  line: {
+                    borderCapStyle: "round",
+                    borderJoinStyle: "round",
                   },
                 },
                 onHover: (event, elements) => {
@@ -341,12 +387,14 @@ const Charts = ({ xp, maxXP, hp, maxHp, mana, maxMana, completedQuests = [] }) =
                 },
               }}
             />
-            
+
             {hoveredPoint !== null && (
-              <div 
+              <div
                 className="absolute top-0 left-0 w-full h-full pointer-events-none"
                 style={{
-                  background: `radial-gradient(circle at ${(hoveredPoint / (sortedQuests.length - 1)) * 100}% 50%, rgba(0, 240, 255, 0.1), transparent 70%)`
+                  background: `radial-gradient(circle at ${
+                    (hoveredPoint / (sortedQuests.length - 1)) * 100
+                  }% 50%, rgba(0, 240, 255, 0.1), transparent 70%)`,
                 }}
               />
             )}
