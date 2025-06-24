@@ -136,6 +136,9 @@ const RadialProgress = ({
     }
   }, [currentValue, maxValue]);
 
+  const canvas = chartRef.current;
+  if (!canvas || !canvas.ownerDocument) return;
+
   return (
     <motion.div
       className="relative flex flex-col items-center group transition-all duration-300 will-change-transform"
@@ -166,7 +169,10 @@ const RadialProgress = ({
               shape: { type: "circle" },
               opacity: { value: 0.8, random: true },
             },
-            interactivity: { detect_on: "canvas", events: { onhover: { enable: false } } },
+            interactivity: {
+              detect_on: "canvas",
+              events: { onhover: { enable: false } },
+            },
             retina_detect: true,
           }}
         />
@@ -220,7 +226,11 @@ const RadialProgress = ({
           boxShadow: `0 0 30px ${color}`,
         }}
         animate={{
-          boxShadow: [`0 0 30px ${color}`, `0 0 50px ${color}`, `0 0 30px ${color}`],
+          boxShadow: [
+            `0 0 30px ${color}`,
+            `0 0 50px ${color}`,
+            `0 0 30px ${color}`,
+          ],
         }}
         transition={{ duration: 2, repeat: Infinity }}
       />
@@ -270,7 +280,8 @@ const Charts = ({
 
   const sortedQuests = [...completedQuests].sort(
     (a, b) =>
-      new Date(a.completionTimestamp || 0) - new Date(b.completionTimestamp || 0)
+      new Date(a.completionTimestamp || 0) -
+      new Date(b.completionTimestamp || 0)
   );
 
   const cumulativeXP = sortedQuests.reduce(
@@ -288,7 +299,8 @@ const Charts = ({
         label: "Cumulative XP",
         data: cumulativeXP,
         fill: true,
-        borderColor: (ctx) => createGlassGradient(ctx.chart.ctx, neonPalette.xp.line),
+        borderColor: (ctx) =>
+          createGlassGradient(ctx.chart.ctx, neonPalette.xp.line),
         backgroundColor: (ctx) =>
           createGlassGradient(ctx.chart.ctx, [
             "rgba(0, 240, 255, 0.2)",
@@ -469,7 +481,9 @@ const Charts = ({
                 className="absolute w-2 h-2 rounded-full pointer-events-none"
                 style={{
                   left: `${(i / (sortedQuests.length - 1)) * 100}%`,
-                  bottom: `${(cumulativeXP[i] / Math.max(...cumulativeXP)) * 100}%`,
+                  bottom: `${
+                    (cumulativeXP[i] / Math.max(...cumulativeXP)) * 100
+                  }%`,
                   background: neonPalette.xp.solid,
                   boxShadow: `0 0 8px ${neonPalette.xp.solid}`,
                   willChange: "transform, opacity",

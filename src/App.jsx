@@ -9,6 +9,7 @@ import { initParticlesEngine } from "@tsparticles/react";
 import { loadSlim } from "@tsparticles/slim";
 import { motion, AnimatePresence } from "framer-motion";
 import LoadingComponent from "./LoadingComponent";
+import { ErrorBoundary } from "react-error-boundary";
 
 const Particles = lazy(() => import("@tsparticles/react"));
 
@@ -1041,6 +1042,8 @@ const App = () => {
     }
   };
 
+  const ChartErrorFallback = () => <div>⚠️ Chart failed to load.</div>;
+
   return (
     <div className="relative min-h-screen bg-gray-900 text-white font-sans overflow-hidden">
       {particlesLoaded && (
@@ -1114,7 +1117,6 @@ const App = () => {
                 </div>
               </div>
             )}
-
             <Header
               level={level}
               coins={coins}
@@ -1130,7 +1132,6 @@ const App = () => {
               isPenaltyActive={isPenaltyActive}
               showPenaltyDetails={() => setShowPenaltyModal(true)}
             />
-
             {Object.entries(tabNames).map(([key, name]) => (
               <button
                 key={key}
@@ -1146,16 +1147,20 @@ const App = () => {
             ))}
             <div className="px-2 py-4">{renderTabContent()}</div>
 
-            <Charts
-              xp={xp}
-              maxXP={maxXP}
-              hp={hp}
-              maxHp={maxHp}
-              mana={mana}
-              maxMana={maxMana}
-              completedQuests={quests.filter((q) => q.status === "completed")}
-            />
+            <ErrorBoundary FallbackComponent={ChartErrorFallback}>
+              <Charts
+                xp={xp}
+                maxXP={maxXP}
+                hp={hp}
+                maxHp={maxHp}
+                mana={mana}
+                maxMana={maxMana}
+                completedQuests={quests.filter((q) => q.status === "completed")}
+              />
+            </ErrorBoundary>
+
             <Journal />
+
             <Modals
               showQuestModal={showQuestModal}
               setShowQuestModal={setShowQuestModal}
