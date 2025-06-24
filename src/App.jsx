@@ -8,6 +8,7 @@ import Journal from "./Journal";
 import { initParticlesEngine } from "@tsparticles/react";
 import { loadSlim } from "@tsparticles/slim";
 import { motion, AnimatePresence } from "framer-motion";
+import LoadingComponent from "./LoadingComponent";
 
 const Particles = lazy(() => import("@tsparticles/react"));
 
@@ -1093,48 +1094,7 @@ const App = () => {
       )}
       <div className="container mx-auto p-4 max-w-2xl relative z-10">
         {loading ? (
-          <div className="flex items-center justify-center min-h-[90vh] relative overflow-hidden">
-            {/* Magic swirl */}
-            <motion.div
-              className="absolute w-[150px] h-[150px] border-[6px] border-purple-500 rounded-full animate-spin-slow"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 0.1 }}
-              style={{
-                boxShadow: "0 0 80px #8b5cf6",
-                top: "30%",
-                left: "30%",
-                position: "absolute",
-              }}
-            />
-            {/* Center glowing orb */}
-            <motion.div
-              initial={{ scale: 0.7, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              transition={{ duration: 1.2, ease: "easeOut" }}
-              className="relative z-10 flex flex-col items-center justify-center"
-            >
-              <motion.div
-                className="w-24 h-24 rounded-full bg-gradient-to-tr from-purple-600 via-indigo-500 to-blue-500 shadow-[0_0_60px_#8b5cf6] animate-pulse"
-                animate={{
-                  scale: [1, 1.1, 1],
-                  rotate: [0, 10, -10, 0],
-                }}
-                transition={{ duration: 3, repeat: Infinity }}
-              />
-
-              <motion.p
-                className="mt-8 text-center text-xl font-bold text-purple-300 tracking-wider"
-                animate={{ opacity: [0.4, 1, 0.4] }}
-                transition={{ duration: 2.5, repeat: Infinity }}
-              >
-                Syncing with the Realm...
-              </motion.p>
-            </motion.div>
-
-            {/* Aura blur */}
-            <div className="absolute w-96 h-96 rounded-full bg-purple-500/10 blur-3xl top-10 left-10 animate-pulse" />
-            <div className="absolute w-80 h-80 rounded-full bg-blue-500/10 blur-2xl bottom-20 right-20 animate-pulse delay-200" />
-          </div>
+          <LoadingComponent />
         ) : (
           <>
             {showLevelUp && (
