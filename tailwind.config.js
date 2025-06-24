@@ -2,7 +2,14 @@
 module.exports = {
   content: ["./src/**/*.{js,jsx,ts,tsx}"],
   theme: {
-    extend: {},
+    extend: {
+      willChange: [
+        "transform",
+        "opacity",
+        "background-position",
+        "text-shadow",
+      ],
+    },
   },
   plugins: [],
 };

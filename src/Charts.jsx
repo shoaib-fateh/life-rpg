@@ -12,6 +12,9 @@ import {
 } from "chart.js";
 import ChartDataLabels from "chartjs-plugin-datalabels";
 import "chartjs-plugin-gradient";
+import { motion, AnimatePresence } from "framer-motion";
+import Particles from "react-tsparticles";
+import { loadFull } from "tsparticles";
 
 ChartJS.register(
   CategoryScale,
@@ -36,6 +39,7 @@ const RadialProgress = ({
   const chartRef = useRef(null);
   const [isHovered, setIsHovered] = useState(false);
   const [currentValue, setCurrentValue] = useState(0);
+  const particlesInit = async (main) => await loadFull(main);
 
   useEffect(() => {
     let animationFrame;
@@ -133,19 +137,51 @@ const RadialProgress = ({
   }, [currentValue, maxValue]);
 
   return (
-    <div
-      className="relative flex flex-col items-center group transition-all duration-300"
+    <motion.div
+      className="relative flex flex-col items-center group transition-all duration-300 will-change-transform"
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
+      initial={{ scale: 0.8, opacity: 0 }}
+      animate={{ scale: 1, opacity: 1 }}
+      transition={{ type: "spring", damping: 10 }}
+      whileHover={{ scale: 1.05, rotate: 2 }}
     >
-      <canvas
+      {currentValue > maxValue * 0.8 && (
+        <Particles
+          id={`particles-${label}`}
+          init={particlesInit}
+          className="absolute inset-0 pointer-events-none"
+          options={{
+            particles: {
+              number: { value: currentValue > maxValue * 0.9 ? 15 : 8 },
+              color: { value: color },
+              size: { value: 2, random: true },
+              move: {
+                enable: true,
+                speed: 0.5,
+                direction: "outside",
+                out_mode: "out",
+              },
+              links: { enable: false },
+              shape: { type: "circle" },
+              opacity: { value: 0.8, random: true },
+            },
+            interactivity: { detect_on: "canvas", events: { onhover: { enable: false } } },
+            retina_detect: true,
+          }}
+        />
+      )}
+
+      <motion.canvas
         ref={canvasRef}
         className={`w-28 h-28 transition-all duration-500 ${
           isHovered ? "scale-110" : "scale-100"
-        }`}
+        } will-change-transform`}
+        whileHover={{ rotate: 5 }}
+        transition={{ type: "spring", stiffness: 300 }}
       />
       <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-        <span
+        <motion.span
           className={`text-2xl font-bold transition-all duration-300 ${
             isHovered ? "text-3xl" : "text-2xl"
           }`}
@@ -153,23 +189,29 @@ const RadialProgress = ({
             color: color,
             textShadow: `0 0 10px ${color}, 0 0 20px ${color}`,
           }}
+          animate={{ scale: isHovered ? 1.1 : 1 }}
         >
           {Math.round(currentValue)}
-        </span>
-        <span
+        </motion.span>
+        <motion.span
           className={`text-xs uppercase tracking-wider transition-all duration-300 ${
             isHovered ? "text-sm text-white" : "text-gray-300"
           }`}
+          animate={{ opacity: isHovered ? 1 : 0.8 }}
         >
           {label}
-        </span>
+        </motion.span>
       </div>
       {isHovered && (
-        <div className="absolute -bottom-6 bg-black/90 text-white text-xs px-3 py-1 rounded-full whitespace-nowrap border border-white/10">
+        <motion.div
+          className="absolute -bottom-6 bg-black/90 text-white text-xs px-3 py-1 rounded-full whitespace-nowrap border border-white/10"
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+        >
           {Math.round(currentValue)} / {maxValue}
-        </div>
+        </motion.div>
       )}
-      <div
+      <motion.div
         className={`absolute inset-0 rounded-full transition-all duration-500 ${
           isHovered ? "opacity-30" : "opacity-20"
         }`}
@@ -177,8 +219,12 @@ const RadialProgress = ({
           background: color,
           boxShadow: `0 0 30px ${color}`,
         }}
+        animate={{
+          boxShadow: [`0 0 30px ${color}`, `0 0 50px ${color}`, `0 0 30px ${color}`],
+        }}
+        transition={{ duration: 2, repeat: Infinity }}
       />
-    </div>
+    </motion.div>
   );
 };
 
@@ -214,10 +260,8 @@ const Charts = ({
 
   const createGlassGradient = (ctx, colors) => {
     const gradient = ctx.createLinearGradient(0, 0, 0, ctx.canvas.height);
-
     const color1 = colors[0].startsWith("rgba") ? colors[0] : `${colors[0]}ff`;
     const color2 = colors[1].startsWith("rgba") ? colors[1] : `${colors[1]}ff`;
-
     gradient.addColorStop(0, color1);
     gradient.addColorStop(0.5, color2);
     gradient.addColorStop(1, color1);
@@ -226,8 +270,7 @@ const Charts = ({
 
   const sortedQuests = [...completedQuests].sort(
     (a, b) =>
-      new Date(a.completionTimestamp || 0) -
-      new Date(b.completionTimestamp || 0)
+      new Date(a.completionTimestamp || 0) - new Date(b.completionTimestamp || 0)
   );
 
   const cumulativeXP = sortedQuests.reduce(
@@ -245,8 +288,7 @@ const Charts = ({
         label: "Cumulative XP",
         data: cumulativeXP,
         fill: true,
-        borderColor: (ctx) =>
-          createGlassGradient(ctx.chart.ctx, neonPalette.xp.line),
+        borderColor: (ctx) => createGlassGradient(ctx.chart.ctx, neonPalette.xp.line),
         backgroundColor: (ctx) =>
           createGlassGradient(ctx.chart.ctx, [
             "rgba(0, 240, 255, 0.2)",
@@ -266,7 +308,16 @@ const Charts = ({
   };
 
   return (
-    <div className="backdrop-blur-xl bg-gradient-to-b from-gray-900/80 to-gray-800/80 rounded-2xl p-6 shadow-2xl border border-white/10 mb-4 animate-fade-in transform transition-all duration-500 hover:shadow-[0_0_30px_rgba(0,240,255,0.3)]">
+    <motion.div
+      className="backdrop-blur-xl bg-gradient-to-b from-gray-900/80 to-gray-800/80 rounded-2xl p-6 shadow-2xl border border-white/10 mb-4 will-change-transform"
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.8 }}
+      whileHover={{
+        boxShadow: "0 0 40px rgba(0,240,255,0.5)",
+        transition: { duration: 0.3 },
+      }}
+    >
       <div className="flex justify-around mb-8 space-x-2">
         <RadialProgress
           value={xp}
@@ -295,9 +346,21 @@ const Charts = ({
       </div>
 
       <div className="relative overflow-hidden rounded-xl p-4 bg-black/30 border border-white/10 transition-all duration-500 hover:border-cyan-400/30">
-        <h3 className="text-xl font-bold text-center mb-4 text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-400 tracking-wider uppercase text-glow">
+        <motion.h3
+          className="text-xl font-bold text-center mb-4 text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-400 tracking-wider uppercase text-glow"
+          animate={{
+            backgroundPosition: ["0% 50%", "100% 50%", "0% 50%"],
+            textShadow: [
+              "0 0 10px rgba(0,240,255,0.5)",
+              "0 0 20px rgba(0,240,255,0.8)",
+              "0 0 10px rgba(0,240,255,0.5)",
+            ],
+          }}
+          transition={{ duration: 3, repeat: Infinity }}
+          style={{ willChange: "background-position, text-shadow" }}
+        >
           Quest Journey
-        </h3>
+        </motion.h3>
 
         {sortedQuests.length > 0 ? (
           <div className="relative h-64">
@@ -387,27 +450,64 @@ const Charts = ({
                 },
               }}
             />
-
             {hoveredPoint !== null && (
-              <div
+              <motion.div
                 className="absolute top-0 left-0 w-full h-full pointer-events-none"
                 style={{
                   background: `radial-gradient(circle at ${
                     (hoveredPoint / (sortedQuests.length - 1)) * 100
-                  }% 50%, rgba(0, 240, 255, 0.1), transparent 70%)`,
+                  }% 50%, rgba(0, 240, 255, 0.2), transparent 70%)`,
                 }}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.3 }}
               />
             )}
+            {sortedQuests.map((_, i) => (
+              <motion.div
+                key={i}
+                className="absolute w-2 h-2 rounded-full pointer-events-none"
+                style={{
+                  left: `${(i / (sortedQuests.length - 1)) * 100}%`,
+                  bottom: `${(cumulativeXP[i] / Math.max(...cumulativeXP)) * 100}%`,
+                  background: neonPalette.xp.solid,
+                  boxShadow: `0 0 8px ${neonPalette.xp.solid}`,
+                  willChange: "transform, opacity",
+                }}
+                animate={{
+                  y: [0, -5, 0],
+                  opacity: [0.7, 1, 0.7],
+                }}
+                transition={{
+                  duration: 2,
+                  repeat: Infinity,
+                  delay: i * 0.1,
+                }}
+              />
+            ))}
           </div>
         ) : (
-          <div className="h-64 flex items-center justify-center">
-            <p className="text-gray-400 text-center animate-pulse text-lg">
+          <div className="h-64 flex flex-col items-center justify-center">
+            <motion.div
+              animate={{ rotate: 360 }}
+              transition={{ duration: 8, repeat: Infinity, ease: "linear" }}
+              className="mb-4"
+            >
+              <div className="w-16 h-16 border-t-4 border-cyan-400 rounded-full"></div>
+            </motion.div>
+            <motion.p
+              className="text-gray-400 text-center text-lg"
+              animate={{ opacity: [0.5, 1, 0.5] }}
+              transition={{ duration: 2, repeat: Infinity }}
+            >
               Begin your adventure to see progress!
-            </p>
+            </motion.p>
           </div>
         )}
       </div>
-    </div>
+      <div className="absolute top-0 left-0 w-32 h-32 bg-cyan-600/10 rounded-full filter blur-3xl -z-10"></div>
+      <div className="absolute bottom-0 right-0 w-40 h-40 bg-purple-600/10 rounded-full filter blur-3xl -z-10"></div>
+    </motion.div>
   );
 };
 
