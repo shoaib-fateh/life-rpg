@@ -1,12 +1,11 @@
 import React, { useState, useEffect } from "react";
-import Dexie from "dexie";
+import { createClient } from "@supabase/supabase-js";
 import CustomButton from "./CustomButton";
 import { motion, AnimatePresence } from "framer-motion";
 
-const db = new Dexie("life_rpg");
-db.version(1).stores({
-  journal: "++id, text, timestamp",
-});
+const supabaseUrl = "https://dycmmpjydiilovfvqxog.supabase.co";
+const supabaseKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR5Y21tcGp5ZGlpbG92ZnZxeG9nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTA3NzcyMzAsImV4cCI6MjA2NjM1MzIzMH0.SYXqbiZbWCI-CihtGO3jIWO0riYOC_tEiFV2EYw_lmE";
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 const Journal = () => {
   const [entries, setEntries] = useState([]);
@@ -16,8 +15,12 @@ const Journal = () => {
   useEffect(() => {
     const loadEntries = async () => {
       try {
-        const journalEntries = await db.journal.toArray();
-        setEntries(journalEntries.sort((a, b) => b.timestamp - a.timestamp));
+        const { data: journalEntries, error } = await supabase
+          .from("journal")
+          .select("*")
+          .order("timestamp", { ascending: false });
+        if (error) throw error;
+        setEntries(journalEntries);
       } catch (error) {
         console.error("Error loading journal entries:", error);
       } finally {
@@ -31,11 +34,13 @@ const Journal = () => {
     if (!newEntry.trim()) return;
 
     try {
-      const id = await db.journal.add({
-        text: newEntry,
-        timestamp: new Date().toISOString(),
-      });
-      setEntries([{ id, text: newEntry, timestamp: new Date().toISOString() }, ...entries]);
+      const { data, error } = await supabase
+        .from("journal")
+        .insert([{ text: newEntry, timestamp: new Date().toISOString() }])
+        .select()
+        .single();
+      if (error) throw error;
+      setEntries([{ ...data }, ...entries]);
       setNewEntry("");
     } catch (error) {
       console.error("Error adding journal entry:", error);
@@ -44,7 +49,8 @@ const Journal = () => {
 
   const deleteEntry = async (id) => {
     try {
-      await db.journal.delete(id);
+      const { error } = await supabase.from("journal").delete().eq("id", id);
+      if (error) throw error;
       setEntries(entries.filter((entry) => entry.id !== id));
     } catch (error) {
       console.error("Error deleting journal entry:", error);

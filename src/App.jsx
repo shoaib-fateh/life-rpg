@@ -1,24 +1,21 @@
-import { useState, useEffect, useRef } from "react";
-import Particles from "particles.js";
-import Dexie from "dexie";
+import React, { useState, useEffect, useRef, Suspense, lazy } from "react";
+import { createClient } from "@supabase/supabase-js";
 import Header from "./Header";
 import Quests from "./Quests";
 import Charts from "./Charts";
 import Modals from "./Modals";
 import Journal from "./Journal";
-import { useLiveQuery } from "dexie-react-hooks";
+import { initParticlesEngine } from "@tsparticles/react";
+import { loadSlim } from "@tsparticles/slim";
+import { motion, AnimatePresence } from "framer-motion";
 
-// Initialize Dexie database
-const db = new Dexie("life_rpg");
-db.version(1).stores({
-  gameState: "id",
-  quests: "id",
-  inventory: "id",
-  notifications: "++id, timestamp",
-  achievements: "id",
-  penalties: "++id, startTime, endTime, tasks, apology",
-  journal: "++id, text, timestamp",
-});
+const Particles = lazy(() => import("@tsparticles/react"));
+
+const supabaseUrl = "https://dycmmpjydiilovfvqxog.supabase.co";
+const supabaseKey =
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR5Y21tcGp5ZGlpbG92ZnZxeG9nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTA3NzcyMzAsImV4cCI6MjA2NjM1MzIzMH0.SYXqbiZbWCI-CihtGO3jIWO0riYOC_tEiFV2EYw_lmE";
+
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 const App = () => {
   // Player state
@@ -51,58 +48,185 @@ const App = () => {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("Quests");
   const [notifications, setNotifications] = useState([]);
-  const [achievements, setAchievements] = useState([]);
   const [unreadNotifications, setUnreadNotifications] = useState(0);
+  const [achievements, setAchievements] = useState([]);
+  const [particlesLoaded, setParticlesLoaded] = useState(false);
 
-  const particlesContainerRef = useRef(null);
   const questsRef = useRef([]);
-  const dbPlayerState = useLiveQuery(() => db.gameState.get("playerState"));
-  const dbQuests = useLiveQuery(() => db.quests.toArray(), []);
 
   useEffect(() => {
-    if (dbPlayerState) {
-      setLevel(dbPlayerState.level || 1);
-      setXp(dbPlayerState.xp || 0);
-      setMaxXP(dbPlayerState.maxXP || 980);
-      setCoins(dbPlayerState.coins || 0);
-      setHp(dbPlayerState.hp || 100);
-      setMaxHp(dbPlayerState.maxHp || 100);
-      setMana(dbPlayerState.mana || 100);
-      setMaxMana(dbPlayerState.maxMana || 120);
-      setBadges(dbPlayerState.badges || []);
-      setPenaltyCount(dbPlayerState.penaltyCount || 0);
-      setPenaltyCoins(dbPlayerState.penaltyCoins || 0);
-    }
-  }, [dbPlayerState]);
+    initParticlesEngine(async (engine) => {
+      await loadSlim(engine);
+      setParticlesLoaded(true);
+    }).catch((error) => {
+      console.error("Failed to initialize tsparticles:", error);
+    });
+  }, []);
 
   useEffect(() => {
-    if (dbQuests) {
-      setQuests(dbQuests);
-    }
-  }, [dbQuests]);
+    const loadState = async () => {
+      try {
+        const [
+          { data: playerState },
+          { data: questsData },
+          { data: inventoryItems },
+          { data: notificationsData },
+          { data: achievementsData },
+          { data: penaltiesData },
+        ] = await Promise.all([
+          supabase
+            .from("game_state")
+            .select("*")
+            .eq("id", "playerState")
+            .single(),
+          supabase.from("quests").select("*"),
+          supabase.from("inventory").select("*"),
+          supabase.from("notifications").select("*"),
+          supabase.from("achievements").select("*"),
+          supabase.from("penalties").select("*"),
+        ]);
 
-  useEffect(() => {
-    const initPlayerStateIfNeeded = async () => {
-      const existing = await db.gameState.get("playerState");
-      if (!existing) {
-        await db.gameState.put({
-          id: "playerState",
-          level: 1,
-          xp: 0,
-          maxXP: 980,
-          coins: 0,
-          hp: 100,
-          maxHp: 100,
-          mana: 100,
-          maxMana: 120,
-          badges: [],
-          penaltyCount: 0,
-          penaltyCoins: 0,
+        if (playerState) {
+          setLevel(playerState.level || 1);
+          setXp(playerState.xp || 0);
+          setMaxXP(playerState.max_xp || 980);
+          setCoins(playerState.coins || 0);
+          setHp(playerState.hp || 100);
+          setMaxHp(playerState.max_hp || 100);
+          setMana(playerState.mana || 100);
+          setMaxMana(playerState.max_mana || 120);
+          setBadges(playerState.badges || []);
+          setPenaltyCount(playerState.penalty_count || 0);
+          setPenaltyCoins(playerState.penalty_coins || 0);
+        } else {
+          await supabase.from("game_state").insert({
+            id: "playerState",
+            level: 1,
+            xp: 0,
+            max_xp: 980,
+            coins: 0,
+            hp: 100,
+            max_hp: 100,
+            mana: 100,
+            max_mana: 120,
+            badges: [],
+            penalty_count: 0,
+            penalty_coins: 0,
+          });
+        }
+
+        setQuests(
+          questsData.map((q) => ({
+            ...q,
+            status: q.status || "not_started",
+            dependencies: q.dependencies || [],
+            deadline: q.deadline || null,
+            subquests: q.subquests || [],
+            repeatable: !!q.repeatable,
+            is24Hour: !!q.is_24_hour,
+            requiredLevel: q.required_level || 1,
+            coins: q.coins || 0,
+            xp: q.xp || 0,
+            warningSentForCurrentPeriod:
+              q.warning_sent_for_current_period || false,
+          }))
+        );
+
+        const invData = {};
+        inventoryItems.forEach((item) => {
+          invData[item.id] = { ...item };
         });
+        setInventory(invData);
+
+        setNotifications(notificationsData);
+        setAchievements(achievementsData);
+        setUnreadNotifications(notificationsData.filter((n) => !n.read).length);
+        setIsPenaltyActive(penaltiesData.length > 0);
+        setCurrentPenalty(penaltiesData[0] || null);
+      } catch (error) {
+        console.error("Error loading data from Supabase:", error);
+      } finally {
+        setLoading(false);
       }
     };
-    initPlayerStateIfNeeded();
+    loadState();
   }, []);
+
+  useEffect(() => {
+    if (loading) return;
+    supabase
+      .from("game_state")
+      .upsert({
+        id: "playerState",
+        level,
+        xp,
+        max_xp: maxXP,
+        coins,
+        hp,
+        max_hp: maxHp,
+        mana,
+        max_mana: maxMana,
+        badges,
+        penalty_count: penaltyCount,
+        penalty_coins: penaltyCoins,
+      })
+      .then(({ error }) => {
+        if (error) console.error("Error updating player state:", error);
+      });
+  }, [
+    level,
+    xp,
+    maxXP,
+    coins,
+    hp,
+    maxHp,
+    mana,
+    maxMana,
+    badges,
+    penaltyCount,
+    penaltyCoins,
+    loading,
+  ]);
+
+  useEffect(() => {
+    if (loading) return;
+    supabase
+      .from("quests")
+      .upsert(quests)
+      .then(({ error }) => {
+        if (error) console.error("Error updating quests:", error);
+      });
+  }, [quests, loading]);
+
+  useEffect(() => {
+    if (loading) return;
+    supabase
+      .from("inventory")
+      .upsert(Object.values(inventory))
+      .then(({ error }) => {
+        if (error) console.error("Error updating inventory:", error);
+      });
+  }, [inventory, loading]);
+
+  useEffect(() => {
+    if (loading) return;
+    supabase
+      .from("notifications")
+      .upsert(notifications)
+      .then(({ error }) => {
+        if (error) console.error("Error updating notifications:", error);
+      });
+  }, [notifications, loading]);
+
+  useEffect(() => {
+    if (loading) return;
+    supabase
+      .from("achievements")
+      .upsert(achievements)
+      .then(({ error }) => {
+        if (error) console.error("Error updating achievements:", error);
+      });
+  }, [achievements, loading]);
 
   useEffect(() => {
     const checkDeadlines = async () => {
@@ -118,12 +242,19 @@ const App = () => {
           ) {
             updated = true;
             if (q.type === "daily" && q.repeatable) {
-              const ps = await db.gameState.get("playerState");
-              let { hp, maxHp, mana, maxMana, coins } = ps;
-              hp = Math.max(0, hp - Math.floor(maxHp * 0.85));
-              mana = Math.max(0, mana - Math.floor(maxMana * 0.85));
+              const { data: ps } = await supabase
+                .from("game_state")
+                .select("*")
+                .eq("id", "playerState")
+                .single();
+              let { hp, max_hp, mana, max_mana, coins } = ps;
+              hp = Math.max(0, hp - Math.floor(max_hp * 0.85));
+              mana = Math.max(0, mana - Math.floor(max_mana * 0.85));
               coins = Math.max(0, coins - Math.floor(coins * 0.15));
-              await db.gameState.put({ ...ps, hp, mana, coins });
+              await supabase
+                .from("game_state")
+                .update({ hp, mana, coins })
+                .eq("id", "playerState");
 
               const nextMidnight = new Date();
               nextMidnight.setDate(nextMidnight.getDate() + 1);
@@ -138,7 +269,7 @@ const App = () => {
                 ...q,
                 status: "not_started",
                 deadline: newDeadline,
-                warningSentForCurrentPeriod: false,
+                warning_sent_for_current_period: false,
               };
             } else {
               addNotification(
@@ -168,51 +299,92 @@ const App = () => {
     };
 
     try {
-      const id = await db.notifications.add(newNotification);
-      setNotifications((prev) => [...prev, { ...newNotification, id }]);
+      const { data } = await supabase
+        .from("notifications")
+        .insert(newNotification)
+        .select()
+        .single();
+      setNotifications((prev) => [...prev, data]);
       setUnreadNotifications((prev) => prev + 1);
-    } catch (e) {
-      console.error("Error adding notification:", e);
+    } catch (error) {
+      console.error("Error adding notification:", error);
     }
   };
 
   const markNotificationAsRead = async (id) => {
     try {
-      await db.notifications.update(id, { read: true });
+      await supabase.from("notifications").update({ read: true }).eq("id", id);
       setNotifications((prev) =>
         prev.map((n) => (n.id === id ? { ...n, read: true } : n))
       );
       setUnreadNotifications((prev) => Math.max(0, prev - 1));
-    } catch (e) {
-      console.error("Error marking notification as read:", e);
+    } catch (error) {
+      console.error("Error marking notification as read:", error);
     }
   };
 
   const markAllNotificationsAsRead = async () => {
     try {
-      await db.notifications.toCollection().modify({ read: true });
+      await supabase
+        .from("notifications")
+        .update({ read: true })
+        .neq("read", true);
       setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
       setUnreadNotifications(0);
-    } catch (e) {
-      console.error("Error marking all notifications as read:", e);
+    } catch (error) {
+      console.error("Error marking all notifications as read:", error);
     }
   };
 
   const addAchievement = async (achievement) => {
     try {
-      await db.achievements.put(achievement);
-      setAchievements((prev) => [...prev, achievement]);
+      const { data } = await supabase
+        .from("achievements")
+        .insert({
+          id: achievement.id,
+          name: achievement.name,
+          description: achievement.description,
+          type: achievement.type,
+          icon: achievement.icon,
+          reward_value: achievement.rewardValue || null,
+          timestamp: new Date().toISOString(),
+        })
+        .select()
+        .single();
+      setAchievements((prev) => [...prev, data]);
 
       addNotification(
         `Achievement Unlocked: ${achievement.name}! ${achievement.description}`,
         "achievement"
       );
 
-      if (achievement.effect) {
-        achievement.effect();
+      // اعمال پاداش‌ها به صورت جداگانه
+      if (achievement.id === "rising_star") {
+        setCoins((prev) => prev + 200);
+        setXp((prev) => prev + 100);
+      } else if (achievement.id === "master_adventurer") {
+        setCoins((prev) => prev + 500);
+        setMaxHp((prev) => Math.floor(prev * 1.1));
+        setMaxMana((prev) => Math.floor(prev * 1.1));
+      } else if (achievement.id === "consistent_performer") {
+        setMaxHp((prev) => Math.floor(prev * 1.05));
+      } else if (achievement.id === "unstoppable") {
+        setMaxHp((prev) => Math.floor(prev * 1.1));
+        setMaxMana((prev) => Math.floor(prev * 1.1));
+      } else if (achievement.id === "careless") {
+        setMaxHp((prev) => Math.floor(prev * 0.98));
+        setMaxMana((prev) => Math.floor(prev * 0.98));
+        addNotification(
+          "Careless achievement penalty: -2% max HP and Mana",
+          "penalty"
+        );
+      } else if (achievement.id === "first_purchase") {
+        setCoins((prev) => prev + 100);
+      } else if (achievement.id === "main_quest_starter") {
+        setXp((prev) => prev + 200);
       }
-    } catch (e) {
-      console.error("Error adding achievement:", e);
+    } catch (error) {
+      console.error("Error adding achievement:", error);
     }
   };
 
@@ -234,10 +406,7 @@ const App = () => {
         description: "Reached Level 5",
         type: "positive",
         icon: "⭐",
-        reward: () => {
-          setCoins((prev) => prev + 200);
-          setXp((prev) => prev + 100);
-        },
+        rewardValue: 0, // پاداش‌ها جداگانه اعمال می‌شن
       });
     }
 
@@ -251,11 +420,7 @@ const App = () => {
         description: "Reached Level 10",
         type: "positive",
         icon: "🏆",
-        reward: () => {
-          setCoins((prev) => prev + 500);
-          setMaxHp((prev) => Math.floor(prev * 1.1));
-          setMaxMana((prev) => Math.floor(prev * 1.1));
-        },
+        rewardValue: 0.1, // 10% افزایش برای maxHp و maxMana
       });
     }
 
@@ -273,9 +438,7 @@ const App = () => {
         description: "Completed 3 daily quests in a row",
         type: "positive",
         icon: "🔥",
-        reward: () => {
-          setMaxHp((prev) => Math.floor(prev * 1.05));
-        },
+        rewardValue: 0.05, // 5% افزایش برای maxHp
       });
     }
 
@@ -286,10 +449,7 @@ const App = () => {
         description: "Completed 7 daily quests in a row",
         type: "positive",
         icon: "💪",
-        reward: () => {
-          setMaxHp((prev) => Math.floor(prev * 1.1));
-          setMaxMana((prev) => Math.floor(prev * 1.1));
-        },
+        rewardValue: 0.1, // 10% افزایش برای maxHp و maxMana
       });
     }
 
@@ -304,14 +464,7 @@ const App = () => {
         description: "Received your first penalty",
         type: "negative",
         icon: "⚠️",
-        effect: () => {
-          setMaxHp((prev) => Math.floor(prev * 0.98));
-          setMaxMana((prev) => Math.floor(prev * 0.98));
-          addNotification(
-            "Careless achievement penalty: -2% max HP and Mana",
-            "penalty"
-          );
-        },
+        rewardValue: -0.02, // 2% کاهش برای maxHp و maxMana
       });
     }
 
@@ -323,9 +476,7 @@ const App = () => {
         description: "Bought your first item from the shop",
         type: "positive",
         icon: "🛒",
-        reward: () => {
-          setCoins((prev) => prev + 100);
-        },
+        rewardValue: 0, // پاداش جداگانه اعمال می‌شه
       });
     }
 
@@ -343,9 +494,7 @@ const App = () => {
         description: "Completed your first main quest",
         type: "positive",
         icon: "⚔️",
-        reward: () => {
-          setXp((prev) => prev + 200);
-        },
+        rewardValue: 0, // پاداش جداگانه اعمال می‌شه
       });
     }
   };
@@ -357,38 +506,6 @@ const App = () => {
       setShowLevelUp(false);
     }, 3000);
   };
-
-  useEffect(() => {
-    if (!dbPlayerState) return;
-    db.gameState
-      .put({
-        id: "playerState",
-        level,
-        xp,
-        maxXP,
-        coins,
-        hp,
-        maxHp,
-        mana,
-        maxMana,
-        badges,
-        penaltyCount,
-        penaltyCoins,
-      })
-      .catch((e) => console.error("Error updating player state:", e));
-  }, [
-    level,
-    xp,
-    maxXP,
-    coins,
-    hp,
-    maxHp,
-    mana,
-    maxMana,
-    badges,
-    penaltyCount,
-    penaltyCoins,
-  ]);
 
   useEffect(() => {
     questsRef.current = quests;
@@ -424,295 +541,6 @@ const App = () => {
   };
 
   useEffect(() => {
-    const loadState = async () => {
-      try {
-        const [
-          playerState,
-          questsData,
-          inventoryItems,
-          notificationsData,
-          achievementsData,
-        ] = await Promise.all([
-          db.gameState.get("playerState"),
-          db.quests.toArray(),
-          db.inventory.toArray(),
-          db.notifications.toArray(),
-          db.achievements.toArray(),
-        ]);
-
-        if (playerState) {
-          setLevel(playerState.level || 1);
-          setXp(playerState.xp || 0);
-          setMaxXP(playerState.maxXP || 980);
-          setCoins(playerState.coins || 0);
-          setHp(playerState.hp || 100);
-          setMaxHp(playerState.maxHp || 100);
-          setMana(playerState.mana || 100);
-          setMaxMana(playerState.maxMana || 120);
-          setBadges(playerState.badges || []);
-          setPenaltyCount(playerState.penaltyCount || 0);
-          setPenaltyCoins(playerState.penaltyCoins || 0);
-        } else {
-          await db.gameState.put({
-            id: "playerState",
-            level: 1,
-            xp: 0,
-            maxXP: 980,
-            coins: 0,
-            hp: 100,
-            maxHp: 100,
-            mana: 100,
-            maxMana: 120,
-            badges: [],
-            penaltyCount: 0,
-            penaltyCoins: 0,
-          });
-        }
-
-        const formattedQuests = questsData.map((q) => ({
-          ...q,
-          status: q.status || "not_started",
-          dependencies: q.dependencies || [],
-          deadline: q.deadline || null,
-          subquests: q.subquests || [],
-          repeatable: !!q.repeatable,
-          is24Hour: !!q.is24Hour,
-          requiredLevel: q.requiredLevel || 1,
-          coins: q.coins || 0,
-          xp: q.xp || 0,
-          warningSentForCurrentPeriod: q.warningSentForCurrentPeriod || false,
-        }));
-        setQuests(formattedQuests);
-
-        const invData = {};
-        inventoryItems.forEach((item) => {
-          let effectFn = () => {};
-          if (item.name === "HP Potion") {
-            effectFn = () => {
-              setHp((prev) => Math.min(prev + 50, maxHp));
-              addBadge("HP+", 3000);
-            };
-          } else if (item.name === "Mana Potion") {
-            effectFn = () => {
-              setMana((prev) => Math.min(prev + 50, maxMana));
-              addBadge("MA+", 3000);
-            };
-          } else if (item.name === "1-Hour Break") {
-            effectFn = () => {
-              console.log("1-hour break used");
-              addBadge("REST", 5000);
-            };
-          }
-          invData[item.id] = { ...item, effect: effectFn };
-        });
-        setInventory(invData);
-
-        setNotifications(notificationsData);
-        setAchievements(achievementsData);
-
-        const unread = notificationsData.filter((n) => !n.read).length;
-        setUnreadNotifications(unread);
-      } catch (error) {
-        console.error("Error loading data from database:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    loadState();
-  }, [maxHp, maxMana]);
-
-  useEffect(() => {
-    const regenerate = () => {
-      if (isPenaltyActive) return;
-      if (hp <= 0 || mana <= 0) return;
-      if (hp < maxHp || mana < maxMana) {
-        const now = new Date();
-        const hour = (now.getUTCHours() + 4) % 24;
-        const baseRate = 0.01;
-        let regenRate = baseRate;
-
-        if (hour >= 20 || hour < 6) regenRate = baseRate * 2;
-
-        if (hp < maxHp * 0.3 || mana < maxMana * 0.3) regenRate *= 1.5;
-
-        setHp((prev) => Math.min(prev + maxHp * regenRate, maxHp));
-        setMana((prev) => Math.min(prev + maxMana * regenRate, maxMana));
-      }
-    };
-
-    const interval = setInterval(regenerate, 3600000);
-    return () => clearInterval(interval);
-  }, [hp, maxHp, mana, maxMana, isPenaltyActive]);
-
-  useEffect(() => {
-    const checkDeadlines = () => {
-      const now = new Date().toISOString();
-      let updated = false;
-      const newQuests = questsRef.current.map((q) => {
-        if (
-          q.deadline &&
-          q.deadline < now &&
-          q.status !== "completed" &&
-          q.status !== "failed"
-        ) {
-          updated = true;
-          addNotification(
-            `Quest "${q.name}" has failed! Penalty applied.`,
-            "penalty"
-          );
-          return { ...q, status: "failed" };
-        }
-        return q;
-      });
-      if (updated) setQuests(newQuests);
-    };
-
-    const interval = setInterval(checkDeadlines, 60000);
-    checkDeadlines();
-    return () => clearInterval(interval);
-  }, []);
-
-  useEffect(() => {
-    const checkPenalty = async () => {
-      const now = new Date().toISOString();
-      const activePenalties = await db.penalties
-        .where("endTime")
-        .above(now)
-        .toArray();
-      setIsPenaltyActive(activePenalties.length > 0);
-      if (activePenalties.length > 0) {
-        setCurrentPenalty(activePenalties[0]);
-        setShowPenaltyModal(true);
-      } else {
-        setCurrentPenalty(null);
-      }
-    };
-    checkPenalty();
-    const interval = setInterval(checkPenalty, 60000);
-    return () => clearInterval(interval);
-  }, []);
-
-  const completePenaltyTask = async (penaltyId, taskIndex) => {
-    const penalty = await db.penalties.get(penaltyId);
-    if (penalty) {
-      const updatedTasks = penalty.tasks.map((task, index) =>
-        index === taskIndex ? { ...task, completed: true } : task
-      );
-      await db.penalties.update(penaltyId, { tasks: updatedTasks });
-      setCurrentPenalty({ ...penalty, tasks: updatedTasks });
-    }
-  };
-
-  const updateApology = async (penaltyId, apology) => {
-    await db.penalties.update(penaltyId, { apology });
-    setCurrentPenalty((prev) => ({ ...prev, apology }));
-  };
-
-  useEffect(() => {
-    if (!loading && particlesContainerRef.current) {
-      window.particlesJS("particles-js", {
-        particles: {
-          number: { value: 80, density: { enable: true, value_area: 800 } },
-          color: { value: "#5a5af0" },
-          shape: { type: "circle" },
-          opacity: { value: 0.5, random: true },
-          size: { value: 3, random: true },
-          line_linked: {
-            enable: true,
-            distance: 150,
-            color: "#5a5af0",
-            opacity: 0.4,
-            width: 1,
-          },
-          move: {
-            enable: true,
-            speed: 6,
-            direction: "none",
-            random: false,
-            straight: false,
-            out_mode: "out",
-            bounce: false,
-          },
-        },
-        interactivity: {
-          detect_on: "canvas",
-          events: {
-            onhover: { enable: true, mode: "repulse" },
-            onclick: { enable: true, mode: "push" },
-            resize: true,
-          },
-          modes: {
-            repulse: { distance: 200, duration: 0.4 },
-            push: { particles_nb: 4 },
-          },
-        },
-        retina_detect: true,
-      });
-    }
-  }, [loading]);
-
-  useEffect(() => {
-    if (loading) return;
-    db.gameState
-      .put({
-        id: "playerState",
-        level,
-        xp,
-        maxXP,
-        coins,
-        hp,
-        maxHp,
-        mana,
-        maxMana,
-        badges,
-        penaltyCount,
-        penaltyCoins,
-      })
-      .catch((e) => console.error("Error updating player state:", e));
-  }, [
-    level,
-    xp,
-    maxXP,
-    coins,
-    hp,
-    maxHp,
-    mana,
-    maxMana,
-    badges,
-    penaltyCount,
-    penaltyCoins,
-    loading,
-  ]);
-
-  useEffect(() => {
-    if (loading) return;
-    db.quests
-      .bulkPut(quests)
-      .catch((e) => console.error("Error updating quests:", e));
-  }, [quests, loading]);
-
-  useEffect(() => {
-    if (loading) return;
-    db.inventory
-      .bulkPut(Object.values(inventory))
-      .catch((e) => console.error("Error updating inventory:", e));
-  }, [inventory, loading]);
-
-  useEffect(() => {
-    if (loading) return;
-    db.notifications
-      .bulkPut(notifications)
-      .catch((e) => console.error("Error updating notifications:", e));
-  }, [notifications, loading]);
-
-  useEffect(() => {
-    if (loading) return;
-    db.achievements
-      .bulkPut(achievements)
-      .catch((e) => console.error("Error updating achievements:", e));
-  }, [achievements, loading]);
-
-  useEffect(() => {
     if (!loading) {
       checkAchievements();
     }
@@ -738,7 +566,7 @@ const App = () => {
 
     let newDeadline = quest.deadline;
 
-    if (quest.is24Hour) {
+    if (quest.is_24_hour) {
       const now = new Date();
       const deadlineDate = new Date(now.getTime() + 24 * 60 * 60 * 1000);
       newDeadline = deadlineDate.toISOString();
@@ -826,7 +654,7 @@ const App = () => {
           ? {
               ...q,
               status: quest.repeatable ? "not_started" : "completed",
-              completionTimestamp: quest.repeatable
+              completion_timestamp: quest.repeatable
                 ? null
                 : new Date().toISOString(),
             }
@@ -899,34 +727,16 @@ const App = () => {
 
     const itemKey = `item_${item.id}_${Date.now()}`;
 
-    let effectFn = () => {};
-    if (item.name === "HP Potion") {
-      effectFn = () => {
-        setHp((prev) => Math.min(prev + 50, maxHp));
-        addBadge("HP+", 3000);
-      };
-    } else if (item.name === "Mana Potion") {
-      effectFn = () => {
-        setMana((prev) => Math.min(prev + 50, maxMana));
-        addBadge("MA+", 3000);
-      };
-    } else if (item.name === "1-Hour Break") {
-      effectFn = () => {
-        console.log("1-hour break used");
-        addBadge("REST", 5000);
-      };
-    }
-
     const newItem = {
       id: itemKey,
       name: item.name,
-      desc: item.desc,
+      description: item.desc,
       count: 1,
-      purchasedPrice: item.cost,
-      timestamp: Date.now(),
-      effect: effectFn,
+      purchased_price: item.cost,
+      timestamp: new Date().toISOString(),
     };
 
+    await supabase.from("inventory").insert(newItem);
     setInventory((prev) => ({ ...prev, [itemKey]: newItem }));
 
     addNotification(`Purchased: ${item.name}`, "shop");
@@ -952,12 +762,14 @@ const App = () => {
 
     const newCount = item.count - 1;
     if (newCount <= 0) {
+      await supabase.from("inventory").delete().eq("id", id);
       setInventory((prev) => {
         const newInv = { ...prev };
         delete newInv[id];
         return newInv;
       });
     } else {
+      await supabase.from("inventory").update({ count: newCount }).eq("id", id);
       setInventory((prev) => ({ ...prev, [id]: { ...item, count: newCount } }));
     }
 
@@ -995,12 +807,14 @@ const App = () => {
       deadline: deadline || null,
       dependencies: dependencies || [],
       repeatable: !!repeatable,
-      requiredLevel: requiredLevel || 1,
+      required_level: requiredLevel || 1,
       xp: xp || 0,
       coins: coins || 0,
-      is24Hour: !!is24Hour,
+      is_24_hour: !!is24Hour,
+      warning_sent_for_current_period: false,
     };
 
+    await supabase.from("quests").insert(newQuest);
     setQuests([...quests, newQuest]);
     setShowQuestModal(false);
 
@@ -1023,18 +837,67 @@ const App = () => {
       description,
       done: false,
     };
-    setQuests(
-      quests.map((q) =>
-        q.id === currentSubquestParentId
-          ? { ...q, subquests: [...(q.subquests || []), newSubquest] }
-          : q
-      )
+    const updatedQuests = quests.map((q) =>
+      q.id === currentSubquestParentId
+        ? { ...q, subquests: [...(q.subquests || []), newSubquest] }
+        : q
     );
+    await supabase
+      .from("quests")
+      .update({
+        subquests: updatedQuests.find((q) => q.id === currentSubquestParentId)
+          .subquests,
+      })
+      .eq("id", currentSubquestParentId);
+    setQuests(updatedQuests);
     setShowSubquestModal(false);
     setCurrentSubquestParentId(null);
 
     addNotification(`Subquest added to "${parent.name}": ${name}`, "quest");
   };
+
+  const completePenaltyTask = async (penaltyId, taskIndex) => {
+    const { data: penalty } = await supabase
+      .from("penalties")
+      .select("*")
+      .eq("id", penaltyId)
+      .single();
+    if (penalty) {
+      const updatedTasks = penalty.tasks.map((task, index) =>
+        index === taskIndex ? { ...task, completed: true } : task
+      );
+      await supabase
+        .from("penalties")
+        .update({ tasks: updatedTasks })
+        .eq("id", penaltyId);
+      setCurrentPenalty({ ...penalty, tasks: updatedTasks });
+    }
+  };
+
+  const updateApology = async (penaltyId, apology) => {
+    await supabase.from("penalties").update({ apology }).eq("id", penaltyId);
+    setCurrentPenalty((prev) => ({ ...prev, apology }));
+  };
+
+  useEffect(() => {
+    const checkPenalty = async () => {
+      const now = new Date().toISOString();
+      const { data: activePenalties } = await supabase
+        .from("penalties")
+        .select("*")
+        .gt("end_time", now);
+      setIsPenaltyActive(activePenalties.length > 0);
+      if (activePenalties.length > 0) {
+        setCurrentPenalty(activePenalties[0]);
+        setShowPenaltyModal(true);
+      } else {
+        setCurrentPenalty(null);
+      }
+    };
+    checkPenalty();
+    const interval = setInterval(checkPenalty, 60000);
+    return () => clearInterval(interval);
+  }, []);
 
   const renderTabContent = () => {
     switch (activeTab) {
@@ -1179,34 +1042,98 @@ const App = () => {
 
   return (
     <div className="relative min-h-screen bg-gray-900 text-white font-sans overflow-hidden">
-      <div
-        ref={particlesContainerRef}
-        id="particles-js"
-        className="absolute inset-0 z-0"
-      />
+      {particlesLoaded && (
+        <Suspense fallback={null}>
+          <Particles
+            id="particles-js"
+            className="absolute inset-0 z-0"
+            options={{
+              particles: {
+                number: {
+                  value: 80,
+                  density: { enable: true, value_area: 800 },
+                },
+                color: { value: "#5a5af0" },
+                shape: { type: "circle" },
+                opacity: { value: 0.5, random: true },
+                size: { value: 3, random: true },
+                line_linked: {
+                  enable: true,
+                  distance: 150,
+                  color: "#5a5af0",
+                  opacity: 0.4,
+                  width: 1,
+                },
+                move: {
+                  enable: true,
+                  speed: 6,
+                  direction: "none",
+                  random: false,
+                  straight: false,
+                  out_mode: "out",
+                  bounce: false,
+                },
+              },
+              interactivity: {
+                detect_on: "canvas",
+                events: {
+                  onhover: { enable: true, mode: "repulse" },
+                  onclick: { enable: true, mode: "push" },
+                  resize: true,
+                },
+                modes: {
+                  repulse: { distance: 200, duration: 0.4 },
+                  push: { particles_nb: 4 },
+                },
+              },
+              retina_detect: true,
+            }}
+          />
+        </Suspense>
+      )}
       <div className="container mx-auto p-4 max-w-2xl relative z-10">
         {loading ? (
-          <div className="flex items-center justify-center min-h-[90vh]">
-            <div className="backdrop-blur-xl bg-gradient-to-b from-gray-900/50 to-gray-800/50 border border-white/10 rounded-xl p-8 shadow-2xl max-w-xs w-full flex flex-col items-center animate-pop-in">
-              <div className="animate-pulse">
-                <svg
-                  className="w-14 h-14 text-purple-300 drop-shadow-glow"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth={1.5}
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M6.5 3l11 11M3 6.5L14 17.5M19 5l-5 5m-2 2l-4 4-1 4 4-1 4-4"
-                  />
-                </svg>
-              </div>
-              <p className="mt-4 text-center text-purple-200 font-bold text-lg animate-bounce">
-                Loading the fantasy world...
-              </p>
-            </div>
+          <div className="flex items-center justify-center min-h-[90vh] relative overflow-hidden">
+            {/* Magic swirl */}
+            <motion.div
+              className="absolute w-[150px] h-[150px] border-[6px] border-purple-500 rounded-full animate-spin-slow"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 0.1 }}
+              style={{
+                boxShadow: "0 0 80px #8b5cf6",
+                top: "30%",
+                left: "30%",
+                position: "absolute",
+              }}
+            />
+            {/* Center glowing orb */}
+            <motion.div
+              initial={{ scale: 0.7, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ duration: 1.2, ease: "easeOut" }}
+              className="relative z-10 flex flex-col items-center justify-center"
+            >
+              <motion.div
+                className="w-24 h-24 rounded-full bg-gradient-to-tr from-purple-600 via-indigo-500 to-blue-500 shadow-[0_0_60px_#8b5cf6] animate-pulse"
+                animate={{
+                  scale: [1, 1.1, 1],
+                  rotate: [0, 10, -10, 0],
+                }}
+                transition={{ duration: 3, repeat: Infinity }}
+              />
+
+              <motion.p
+                className="mt-8 text-center text-xl font-bold text-purple-300 tracking-wider"
+                animate={{ opacity: [0.4, 1, 0.4] }}
+                transition={{ duration: 2.5, repeat: Infinity }}
+              >
+                Syncing with the Realm...
+              </motion.p>
+            </motion.div>
+
+            {/* Aura blur */}
+            <div className="absolute w-96 h-96 rounded-full bg-purple-500/10 blur-3xl top-10 left-10 animate-pulse" />
+            <div className="absolute w-80 h-80 rounded-full bg-blue-500/10 blur-2xl bottom-20 right-20 animate-pulse delay-200" />
           </div>
         ) : (
           <>
@@ -1313,7 +1240,7 @@ const App = () => {
                   </p>
                   <p className="text-gray-300 mb-4">
                     Penalty ends on:{" "}
-                    {new Date(currentPenalty.endTime).toLocaleString()}
+                    {new Date(currentPenalty.end_time).toLocaleString()}
                   </p>
                   <p className="text-gray-300 mb-4">
                     Additional tasks:

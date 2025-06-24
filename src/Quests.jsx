@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import Dexie from "dexie";
+import { createClient } from "@supabase/supabase-js";
 import CustomButton from "./CustomButton";
 import Modals from "./Modals";
 import { CountdownCircleTimer } from "react-countdown-circle-timer";
@@ -7,12 +7,9 @@ import { gsap } from "gsap";
 import QuestItem from "./QuestItem";
 import CountdownTimer from "./CountdownTimer";
 
-// Initialize Dexie DB
-const db = new Dexie("life_rpg");
-db.version(1).stores({
-  gameState: "id",
-  quests: "id",
-});
+const supabaseUrl = "https://dycmmpjydiilovfvqxog.supabase.co";
+const supabaseKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR5Y21tcGp5ZGlpbG92ZnZxeG9nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTA3NzcyMzAsImV4cCI6MjA2NjM1MzIzMH0.SYXqbiZbWCI-CihtGO3jIWO0riYOC_tEiFV2EYw_lmE";
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 // --- InfoPopup Component ---
 const InfoPopup = ({ message, onClose }) => {
@@ -141,7 +138,11 @@ const Quests = ({
         });
       }
 
-      await db.quests.update(questId, { status: "in_progress" });
+      const { error } = await supabase
+        .from("quests")
+        .update({ status: "in_progress" })
+        .eq("id", questId);
+      if (error) throw error;
 
       setQuests((prev) =>
         prev.map((q) =>
@@ -197,24 +198,37 @@ const Quests = ({
       if (!quest) return;
 
       try {
-        const ps = (await db.gameState.get("playerState")) || {};
-        let { hp, maxHp, mana, maxMana, coins } = ps;
+        const { data: ps, error: psError } = await supabase
+          .from("game_state")
+          .select("*")
+          .eq("id", "playerState")
+          .single();
+        if (psError) throw psError;
 
-        hp = Math.max(0, hp - Math.floor(hp * 0.85));
-        mana = Math.max(0, mana - Math.floor(mana * 0.85));
+        let { hp, max_hp: maxHp, mana, max_mana: maxMana, coins } = ps;
+
+        hp = Math.max(0, hp - Math.floor(maxHp * 0.85));
+        mana = Math.max(0, mana - Math.floor(maxMana * 0.85));
         coins = Math.max(0, coins - Math.floor(coins * 0.15));
 
-        await db.gameState.put({ ...ps, hp, mana, coins });
+        await supabase
+          .from("game_state")
+          .update({ hp, mana, coins })
+          .eq("id", "playerState");
 
         const newDeadline = new Date(
           Date.now() + 24 * 60 * 60 * 1000
         ).toISOString();
 
-        await db.quests.update(questId, {
-          status: "not_started",
-          deadline: newDeadline,
-          warningSentForCurrentPeriod: false,
-        });
+        const { error: questError } = await supabase
+          .from("quests")
+          .update({
+            status: "not_started",
+            deadline: newDeadline,
+            warning_sent_for_current_period: false,
+          })
+          .eq("id", questId);
+        if (questError) throw questError;
 
         setQuests((prev) =>
           prev.map((q) =>
@@ -248,14 +262,23 @@ const Quests = ({
 
     if (everyDayQuests.length > 0) {
       try {
-        const ps = await db.gameState.get("playerState");
-        let { hp, maxHp, mana, maxMana, coins } = ps;
+        const { data: ps, error: psError } = await supabase
+          .from("game_state")
+          .select("*")
+          .eq("id", "playerState")
+          .single();
+        if (psError) throw psError;
+
+        let { hp, max_hp: maxHp, mana, max_mana: maxMana, coins } = ps;
 
         // Apply penalties
         hp = Math.max(0, hp - Math.floor(maxHp * 0.85));
         mana = Math.max(0, mana - Math.floor(maxMana * 0.85));
         coins = Math.max(0, coins - Math.floor(coins * 0.15));
-        await db.gameState.put({ ...ps, hp, mana, coins });
+        await supabase
+          .from("game_state")
+          .update({ hp, mana, coins })
+          .eq("id", "playerState");
 
         // Reset quests
         const newDeadline = new Date();
@@ -263,11 +286,14 @@ const Quests = ({
         newDeadline.setHours(0, 0, 0, 0);
 
         const updates = everyDayQuests.map((q) =>
-          db.quests.update(q.id, {
-            status: "not_started",
-            deadline: newDeadline.toISOString(),
-            warningSentForCurrentPeriod: false,
-          })
+          supabase
+            .from("quests")
+            .update({
+              status: "not_started",
+              deadline: newDeadline.toISOString(),
+              warning_sent_for_current_period: false,
+            })
+            .eq("id", q.id)
         );
 
         await Promise.all(updates);
@@ -477,7 +503,6 @@ const Quests = ({
                 .map((quest) => (
                   <QuestItem
                     key={quest.id}
-                    db={db}
                     quest={quest}
                     userLevel={userLevel}
                     activeTab={activeTab}
@@ -522,7 +547,11 @@ const Quests = ({
 
             try {
               if (editingQuest) {
-                await db.quests.update(editingQuest.id, questData);
+                const { error } = await supabase
+                  .from("quests")
+                  .update(questData)
+                  .eq("id", editingQuest.id);
+                if (error) throw error;
                 setQuests((prev) =>
                   prev.map((q) =>
                     q.id === editingQuest.id ? { ...q, ...questData } : q
@@ -536,9 +565,12 @@ const Quests = ({
                   subquests: [],
                   priority:
                     quests.reduce((max, q) => Math.max(max, q.priority), 0) + 1,
-                  warningSentForCurrentPeriod: false,
+                  warning_sent_for_current_period: false,
                 };
-                await db.quests.add(newQuest);
+                const { error } = await supabase
+                  .from("quests")
+                  .insert(newQuest);
+                if (error) throw error;
                 setQuests((prev) => [...prev, newQuest]);
               }
               setShowQuestModal(false);
