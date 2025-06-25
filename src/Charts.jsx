@@ -137,104 +137,105 @@ const RadialProgress = ({
   }, [currentValue, maxValue]);
 
   const canvas = chartRef.current;
-  if (!canvas || !canvas.ownerDocument) return;
 
   return (
-    <motion.div
-      className="relative flex flex-col items-center group transition-all duration-300 will-change-transform"
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-      initial={{ scale: 0.8, opacity: 0 }}
-      animate={{ scale: 1, opacity: 1 }}
-      transition={{ type: "spring", damping: 10 }}
-      whileHover={{ scale: 1.05, rotate: 2 }}
-    >
-      {currentValue > maxValue * 0.8 && (
-        <Particles
-          id={`particles-${label}`}
-          init={particlesInit}
-          className="absolute inset-0 pointer-events-none"
-          options={{
-            particles: {
-              number: { value: currentValue > maxValue * 0.9 ? 15 : 8 },
-              color: { value: color },
-              size: { value: 2, random: true },
-              move: {
-                enable: true,
-                speed: 0.5,
-                direction: "outside",
-                out_mode: "out",
+    <>
+      <motion.div
+        className="relative flex flex-col items-center group transition-all duration-300 will-change-transform"
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+        initial={{ scale: 0.8, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        transition={{ type: "spring", damping: 10 }}
+        whileHover={{ scale: 1.05, rotate: 2 }}
+      >
+        {currentValue > maxValue * 0.8 && (
+          <Particles
+            id={`particles-${label}`}
+            init={particlesInit}
+            className="absolute inset-0 pointer-events-none"
+            options={{
+              particles: {
+                number: { value: currentValue > maxValue * 0.9 ? 15 : 8 },
+                color: { value: color },
+                size: { value: 2, random: true },
+                move: {
+                  enable: true,
+                  speed: 0.5,
+                  direction: "outside",
+                  out_mode: "out",
+                },
+                links: { enable: false },
+                shape: { type: "circle" },
+                opacity: { value: 0.8, random: true },
               },
-              links: { enable: false },
-              shape: { type: "circle" },
-              opacity: { value: 0.8, random: true },
-            },
-            interactivity: {
-              detect_on: "canvas",
-              events: { onhover: { enable: false } },
-            },
-            retina_detect: true,
-          }}
-        />
-      )}
+              interactivity: {
+                detect_on: "canvas",
+                events: { onhover: { enable: false } },
+              },
+              retina_detect: true,
+            }}
+          />
+        )}
 
-      <motion.canvas
-        ref={canvasRef}
-        className={`w-28 h-28 transition-all duration-500 ${
-          isHovered ? "scale-110" : "scale-100"
-        } will-change-transform`}
-        whileHover={{ rotate: 5 }}
-        transition={{ type: "spring", stiffness: 300 }}
-      />
-      <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-        <motion.span
-          className={`text-2xl font-bold transition-all duration-300 ${
-            isHovered ? "text-3xl" : "text-2xl"
+        <motion.canvas
+          ref={canvasRef}
+          className={`w-28 h-28 transition-all duration-500 ${
+            isHovered ? "scale-110" : "scale-100"
+          } will-change-transform`}
+          whileHover={{ rotate: 5 }}
+          transition={{ type: "spring", stiffness: 300 }}
+        />
+        <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
+          <motion.span
+            className={`text-2xl font-bold transition-all duration-300 ${
+              isHovered ? "text-3xl" : "text-2xl"
+            }`}
+            style={{
+              color: color,
+              textShadow: `0 0 10px ${color}, 0 0 20px ${color}`,
+            }}
+            animate={{ scale: isHovered ? 1.1 : 1 }}
+          >
+            {Math.round(currentValue)}
+          </motion.span>
+          <motion.span
+            className={`text-xs uppercase tracking-wider transition-all duration-300 ${
+              isHovered ? "text-sm text-white" : "text-gray-300"
+            }`}
+            animate={{ opacity: isHovered ? 1 : 0.8 }}
+          >
+            {label}
+          </motion.span>
+        </div>
+        {isHovered && (
+          <motion.div
+            className="absolute -bottom-6 bg-black/90 text-white text-xs px-3 py-1 rounded-full whitespace-nowrap border border-white/10"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+          >
+            {Math.round(currentValue)} / {maxValue}
+          </motion.div>
+        )}
+        <motion.div
+          className={`absolute inset-0 rounded-full transition-all duration-500 ${
+            isHovered ? "opacity-30" : "opacity-20"
           }`}
           style={{
-            color: color,
-            textShadow: `0 0 10px ${color}, 0 0 20px ${color}`,
+            background: color,
+            boxShadow: `0 0 30px ${color}`,
           }}
-          animate={{ scale: isHovered ? 1.1 : 1 }}
-        >
-          {Math.round(currentValue)}
-        </motion.span>
-        <motion.span
-          className={`text-xs uppercase tracking-wider transition-all duration-300 ${
-            isHovered ? "text-sm text-white" : "text-gray-300"
-          }`}
-          animate={{ opacity: isHovered ? 1 : 0.8 }}
-        >
-          {label}
-        </motion.span>
-      </div>
-      {isHovered && (
-        <motion.div
-          className="absolute -bottom-6 bg-black/90 text-white text-xs px-3 py-1 rounded-full whitespace-nowrap border border-white/10"
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-        >
-          {Math.round(currentValue)} / {maxValue}
-        </motion.div>
-      )}
-      <motion.div
-        className={`absolute inset-0 rounded-full transition-all duration-500 ${
-          isHovered ? "opacity-30" : "opacity-20"
-        }`}
-        style={{
-          background: color,
-          boxShadow: `0 0 30px ${color}`,
-        }}
-        animate={{
-          boxShadow: [
-            `0 0 30px ${color}`,
-            `0 0 50px ${color}`,
-            `0 0 30px ${color}`,
-          ],
-        }}
-        transition={{ duration: 2, repeat: Infinity }}
-      />
-    </motion.div>
+          animate={{
+            boxShadow: [
+              `0 0 30px ${color}`,
+              `0 0 50px ${color}`,
+              `0 0 30px ${color}`,
+            ],
+          }}
+          transition={{ duration: 2, repeat: Infinity }}
+        />
+      </motion.div>
+    </>
   );
 };
 

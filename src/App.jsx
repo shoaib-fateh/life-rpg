@@ -997,12 +997,6 @@ const App = () => {
               isPenaltyActive={isPenaltyActive}
               showPenaltyDetails={() => setShowPenaltyModal(true)}
             />
-            <TabNavigation
-              tabNames={tabNames}
-              activeTab={activeTab}
-              setActiveTab={setActiveTab}
-            />
-            <div className="px-2 py-4">{renderTabContent()}</div>
             <ErrorBoundary FallbackComponent={ChartErrorFallback}>
               <Charts
                 xp={xp}
@@ -1014,6 +1008,12 @@ const App = () => {
                 completedQuests={quests.filter((q) => q.status === "completed")}
               />
             </ErrorBoundary>
+            <TabNavigation
+              tabNames={tabNames}
+              activeTab={activeTab}
+              setActiveTab={setActiveTab}
+            />
+            <div className="px-2 py-4">{renderTabContent()}</div>
             <Journal />
           </>
         )}
