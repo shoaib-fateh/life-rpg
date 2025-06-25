@@ -6,6 +6,7 @@ import { CountdownCircleTimer } from "react-countdown-circle-timer";
 import { gsap } from "gsap";
 import QuestItem from "./QuestItem";
 import CountdownTimer from "./CountdownTimer";
+import { RadialProgress } from "./Charts";
 
 const supabaseUrl = "https://dycmmpjydiilovfvqxog.supabase.co";
 const supabaseKey =
@@ -383,89 +384,32 @@ const Quests = ({
                   Daily Reset In:
                 </h3>
                 <div className="flex justify-center items-center space-x-4">
-                  <div className="relative">
-                    <CountdownCircleTimer
-                      key={`hours-${Math.floor(resetTimeLeft / 1000)}`}
-                      isPlaying
-                      duration={24 * 60 * 60}
-                      initialRemainingTime={Math.floor(resetTimeLeft / 1000)}
-                      colors={[["#EF4444"]]}
-                      trailColor="#374151"
-                      strokeWidth={6}
-                      size={70}
-                      rotation="counterclockwise"
-                      onComplete={() => {
-                        resetEveryDayQuests();
-                        return { shouldRepeat: false };
-                      }}
-                    >
-                      {({ remainingTime }) => (
-                        <div className="flex flex-col items-center">
-                          <div className="text-xl font-bold text-red-400">
-                            {Math.floor(remainingTime / 3600)
-                              .toString()
-                              .padStart(2, "0")}
-                          </div>
-                          <div className="text-xs text-gray-400">HRS</div>
-                        </div>
-                      )}
-                    </CountdownCircleTimer>
-                  </div>
-
-                  <div className="relative">
-                    <CountdownCircleTimer
-                      key={`minutes-${Math.floor(resetTimeLeft / 1000)}`}
-                      isPlaying
-                      duration={3600}
-                      initialRemainingTime={Math.floor(
-                        (resetTimeLeft / 1000) % 3600
-                      )}
-                      colors={[["#F59E0B"]]}
-                      trailColor="#374151"
-                      strokeWidth={6}
-                      size={60}
-                      rotation="counterclockwise"
-                      onComplete={() => ({ shouldRepeat: true })}
-                    >
-                      {({ remainingTime }) => (
-                        <div className="flex flex-col items-center">
-                          <div className="text-lg font-bold text-yellow-400">
-                            {Math.floor(remainingTime / 60)
-                              .toString()
-                              .padStart(2, "0")}
-                          </div>
-                          <div className="text-xs text-gray-400">MIN</div>
-                        </div>
-                      )}
-                    </CountdownCircleTimer>
-                  </div>
-
-                  <div className="relative">
-                    <CountdownCircleTimer
-                      key={`seconds-${Math.floor(resetTimeLeft / 1000)}`}
-                      isPlaying
-                      duration={60}
-                      initialRemainingTime={Math.floor(
-                        (resetTimeLeft / 1000) % 60
-                      )}
-                      colors={[["#10B981"]]}
-                      trailColor="#374151"
-                      strokeWidth={6}
-                      size={50}
-                      rotation="counterclockwise"
-                      onComplete={() => ({ shouldRepeat: true })}
-                    >
-                      {({ remainingTime }) => (
-                        <div className="flex flex-col items-center">
-                          <div className="text-base font-bold text-green-400">
-                            {remainingTime.toString().padStart(2, "0")}
-                          </div>
-                          <div className="text-xs text-gray-400">SEC</div>
-                        </div>
-                      )}
-                    </CountdownCircleTimer>
-                  </div>
+                  <RadialProgress
+                    value={Math.floor(resetTimeLeft / 1000 / 3600)}
+                    maxValue={24}
+                    color="#EF4444"
+                    gradientColors={["#991B1B", "#B91C1C", "#DC2626"]}
+                    label="HRS"
+                    pulseRate={2000}
+                  />
+                  <RadialProgress
+                    value={Math.floor(((resetTimeLeft / 1000) % 3600) / 60)}
+                    maxValue={60}
+                    color="#F59E0B"
+                    gradientColors={["#78350F", "#B45309", "#FBBF24"]}
+                    label="MIN"
+                    pulseRate={2000}
+                  />
+                  <RadialProgress
+                    value={Math.floor((resetTimeLeft / 1000) % 60)}
+                    maxValue={60}
+                    color="#10B981"
+                    gradientColors={["#065F46", "#059669", "#34D399"]}
+                    label="SEC"
+                    pulseRate={2000}
+                  />
                 </div>
+
                 <p className="text-xs text-gray-400 mt-3">
                   Uncompleted quests will reset with penalties
                 </p>

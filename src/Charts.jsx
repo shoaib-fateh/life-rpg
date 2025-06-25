@@ -27,7 +27,7 @@ ChartJS.register(
   ChartDataLabels
 );
 
-const RadialProgress = ({
+export const RadialProgress = ({
   value,
   maxValue,
   color,
@@ -294,7 +294,7 @@ const Charts = ({
   );
 
   const progressChartData = {
-    labels: sortedQuests.map((_, i) => `Quest ${i + 1}`),
+    labels: sortedQuests.map((_, i) => `Q${i + 1}`),
     datasets: [
       {
         label: "Cumulative XP",
@@ -310,7 +310,7 @@ const Charts = ({
         borderWidth: 4,
         pointRadius: 0,
         pointHoverRadius: 8,
-        pointBackgroundColor: neonPalette.xp.solid,
+        pointBackgroundColor: "neonPalette.xp.solid",
         pointHoverBackgroundColor: "#ffffff",
         pointBorderWidth: 2,
         pointHoverBorderWidth: 3,
@@ -476,7 +476,7 @@ const Charts = ({
                 transition={{ duration: 0.3 }}
               />
             )}
-            {sortedQuests.map((_, i) => (
+            {/* {sortedQuests.map((_, i) => (
               <motion.div
                 key={i}
                 className="absolute w-2 h-2 rounded-full pointer-events-none"
@@ -499,7 +499,7 @@ const Charts = ({
                   delay: i * 0.1,
                 }}
               />
-            ))}
+            ))} */}
           </div>
         ) : (
           <div className="h-64 flex flex-col items-center justify-center">
