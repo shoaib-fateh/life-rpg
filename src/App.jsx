@@ -150,12 +150,12 @@ const App = () => {
             deadline: q.deadline || null,
             dependencies: q.dependencies || [],
             repeatable: !!q.repeatable,
-            requiredLevel: q.required_level || 1,
+            required_level: q.required_level || 1,
             coins: q.coins || 0,
             xp: q.xp || 0,
-            warningSentForCurrentPeriod:
+            warning_sent_for_current_period:
               q.warning_sent_for_current_period || false,
-            is24Hour: !!q.is_24_hour,
+            is_24_hour: !!q.is_24_hour,
             completion_timestamp: q.completion_timestamp,
           }))
         );
@@ -216,11 +216,34 @@ const App = () => {
     loading,
   ]);
 
+  const toDbQuest = (quest) => {
+    return {
+      id: quest.id,
+      name: quest.name,
+      description: quest.description,
+      difficulty: quest.difficulty,
+      type: quest.type,
+      status: quest.status,
+      subquests: quest.subquests,
+      priority: quest.priority,
+      deadline: quest.deadline,
+      dependencies: quest.dependencies,
+      repeatable: quest.repeatable,
+      required_level: quest.required_level,
+      coins: quest.coins,
+      xp: quest.xp,
+      completion_timestamp: quest.completion_timestamp,
+      warning_sent_for_current_period: quest.warning_sent_for_current_period,
+      is_24_hour: quest.is_24_hour,
+    };
+  };
+
   useEffect(() => {
     if (loading) return;
+    const dbQuests = quests.map(toDbQuest);
     supabase
       .from("quests")
-      .upsert(quests)
+      .upsert(dbQuests)
       .then(({ error }) => {
         if (error) console.error("Error updating quests:", error);
       });
@@ -386,7 +409,6 @@ const App = () => {
         "achievement"
       );
 
-      // Apply rewards separately
       if (achievement.id === "rising_star") {
         setCoins((prev) => prev + 200);
         setXp((prev) => prev + 100);
@@ -595,39 +617,6 @@ const App = () => {
     addNotification(`Quest started: "${quest.name}"`, "quest");
   };
 
-  const toDbQuest = (quest) => {
-    return {
-      id: quest.id,
-      name: quest.name,
-      description: quest.description,
-      difficulty: quest.difficulty,
-      type: quest.type,
-      status: quest.status,
-      subquests: quest.subquests,
-      priority: quest.priority,
-      deadline: quest.deadline,
-      dependencies: quest.dependencies,
-      repeatable: quest.repeatable,
-      required_level: quest.requiredLevel,
-      coins: quest.coins,
-      xp: quest.xp,
-      completion_timestamp: quest.completion_timestamp,
-      warning_sent_for_current_period: quest.warningSentForCurrentPeriod,
-      is_24_hour: quest.is24Hour,
-    };
-  };
-
-  useEffect(() => {
-    if (loading) return;
-    const dbQuests = quests.map(toDbQuest);
-    supabase
-      .from("quests")
-      .upsert(dbQuests)
-      .then(({ error }) => {
-        if (error) console.error("Error updating quests:", error);
-      });
-  }, [quests, loading]);
-
   const completeQuest = async (id) => {
     const quest = quests.find((q) => q.id === id);
     if (!quest) return;
@@ -822,10 +811,10 @@ const App = () => {
     deadline,
     dependencies,
     repeatable,
-    requiredLevel,
+    required_level,
     xp,
     coins,
-    is24Hour,
+    is_24_hour,
   }) => {
     if (!name) {
       addNotification("Quest name not provided", "warning");
@@ -845,10 +834,10 @@ const App = () => {
       deadline: deadline || null,
       dependencies: dependencies || [],
       repeatable: !!repeatable,
-      required_level: requiredLevel || 1,
+      required_level: required_level || 1,
       xp: xp || 0,
       coins: coins || 0,
-      is_24_hour: !!is24Hour,
+      is_24_hour: !!is_24_hour,
       warning_sent_for_current_period: false,
     };
 

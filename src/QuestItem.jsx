@@ -14,7 +14,7 @@ const QuestItem = ({
   setInfoMessage,
   addNotification,
 }) => {
-  const requiredLevel = quest.levelRequired || 1;
+  const requiredLevel = quest.required_level || 1;
   const canStart = userLevel >= requiredLevel;
   
   const isStarted = quest.status === "in_progress";
@@ -22,7 +22,6 @@ const QuestItem = ({
 
   if (isCompleted) return null;
 
-  // Calculate time left for active quests
   let timeLeft = null;
   if (quest.deadline && isStarted && activeTab !== "everyDay") {
     const diff = new Date(quest.deadline) - new Date();
@@ -34,12 +33,13 @@ const QuestItem = ({
           onWarning={() => setInfoMessage(`⌛ Only 4 hours left to complete "${quest.name}"!`)}
           addNotification={addNotification}
           questName={quest.name}
-          warningSent={quest.warningSentForCurrentPeriod || false}
-          onWarningSent={() =>
-            db.quests.update(quest.id, {
-              warningSentForCurrentPeriod: true,
-            })
-          }
+          warningSent={quest.warning_sent_for_current_period || false}
+          onWarningSent={async () => {
+            await db
+              .from("quests")
+              .update({ warning_sent_for_current_period: true })
+              .eq("id", quest.id);
+          }}
         />
       );
     }

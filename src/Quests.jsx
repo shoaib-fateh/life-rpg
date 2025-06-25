@@ -12,7 +12,6 @@ const supabaseKey =
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR5Y21tcGp5ZGlpbG92ZnZxeG9nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTA3NzcyMzAsImV4cCI6MjA2NjM1MzIzMH0.SYXqbiZbWCI-CihtGO3jIWO0riYOC_tEiFV2EYw_lmE";
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-// --- InfoPopup Component ---
 const InfoPopup = ({ message, onClose }) => {
   const popupRef = useRef(null);
 
@@ -57,7 +56,6 @@ const InfoPopup = ({ message, onClose }) => {
   );
 };
 
-// --- Main Quests Component ---
 const Quests = ({
   quests,
   setQuests,
@@ -80,7 +78,6 @@ const Quests = ({
 
   const timerRefs = useRef({});
 
-  // Calculate time until daily reset
   const calculateTimeUntilReset = useCallback(() => {
     const resetTime = new Date();
     resetTime.setDate(resetTime.getDate() + 1);
@@ -90,7 +87,6 @@ const Quests = ({
 
   const [resetTimeLeft, setResetTimeLeft] = useState(calculateTimeUntilReset());
 
-  // Update reset timer
   useEffect(() => {
     const interval = setInterval(() => {
       setResetTimeLeft(calculateTimeUntilReset());
@@ -98,13 +94,11 @@ const Quests = ({
     return () => clearInterval(interval);
   }, [calculateTimeUntilReset]);
 
-  // Update current time
   useEffect(() => {
     const tick = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(tick);
   }, []);
 
-  // Difficulty Emoji helper
   const getDifficultyEmoji = (difficulty) => {
     switch ((difficulty || "").toLowerCase()) {
       case "easy":
@@ -118,14 +112,12 @@ const Quests = ({
     }
   };
 
-  // Enhanced start quest function
   const startQuestHandler = async (questId) => {
     const quest = quests.find((q) => q.id === questId);
     if (!quest || quest.status !== "not_started") return;
     if (!canStartQuest(quest)) return;
 
     try {
-      // Animate the quest card
       const questElement = document.querySelector(
         `[data-quest-id="${questId}"]`
       );
@@ -158,13 +150,11 @@ const Quests = ({
     }
   };
 
-  // Enhanced complete quest function
   const completeQuestHandler = async (questId) => {
     const quest = quests.find((q) => q.id === questId);
     if (!quest) return;
 
     try {
-      // Celebration animation
       const questElement = document.querySelector(
         `[data-quest-id="${questId}"]`
       );
@@ -192,7 +182,6 @@ const Quests = ({
     }
   };
 
-  // Enhanced penalty function
   const applyPenaltyAndResetQuest = useCallback(
     async (questId) => {
       const quest = quests.find((q) => q.id === questId);
@@ -238,7 +227,7 @@ const Quests = ({
                   ...q,
                   status: "not_started",
                   deadline: newDeadline,
-                  warningSentForCurrentPeriod: false,
+                  warning_sent_for_current_period: false,
                 }
               : q
           )
@@ -255,7 +244,6 @@ const Quests = ({
     [addNotification, quests, setQuests]
   );
 
-  // Reset all daily quests
   const resetEveryDayQuests = async () => {
     const everyDayQuests = quests.filter(
       (q) => q.type === "daily" && q.repeatable && q.status !== "completed"
@@ -272,7 +260,6 @@ const Quests = ({
 
         let { hp, max_hp: maxHp, mana, max_mana: maxMana, coins } = ps;
 
-        // Apply penalties
         hp = Math.max(0, hp - Math.floor(maxHp * 0.85));
         mana = Math.max(0, mana - Math.floor(maxMana * 0.85));
         coins = Math.max(0, coins - Math.floor(coins * 0.15));
@@ -281,7 +268,6 @@ const Quests = ({
           .update({ hp, mana, coins })
           .eq("id", "playerState");
 
-        // Reset quests
         const newDeadline = new Date();
         newDeadline.setDate(newDeadline.getDate() + 1);
         newDeadline.setHours(0, 0, 0, 0);
@@ -306,7 +292,7 @@ const Quests = ({
                   ...q,
                   status: "not_started",
                   deadline: newDeadline.toISOString(),
-                  warningSentForCurrentPeriod: false,
+                  warning_sent_for_current_period: false,
                 }
               : q
           )
@@ -322,7 +308,6 @@ const Quests = ({
     }
   };
 
-  // Group quests by category
   const questsByCategory = {
     everyDay: quests
       .filter(
@@ -351,10 +336,8 @@ const Quests = ({
 
   return (
     <div className="relative">
-      {/* Info popup */}
       <InfoPopup message={infoMessage} onClose={() => setInfoMessage(null)} />
 
-      {/* Header with new quest button */}
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-blue-400">
           Quest Journal
@@ -372,7 +355,6 @@ const Quests = ({
         </CustomButton>
       </div>
 
-      {/* Tabs */}
       <div className="bg-gradient-to-br from-gray-900/80 to-gray-800/80 backdrop-blur-lg rounded-xl shadow-2xl border border-white/10 overflow-hidden">
         <div className="flex border-b border-gray-700/50">
           {tabLabels.map(({ key, label }) => (
@@ -390,12 +372,10 @@ const Quests = ({
           ))}
         </div>
 
-        {/* Tab content */}
         <div
           ref={questsContainerRef}
           className="p-5 max-h-[500px] overflow-y-auto custom-scrollbar"
         >
-          {/* Countdown for daily reset */}
           {activeTab === "everyDay" && (
             <div className="mb-6 p-4 bg-gradient-to-r from-purple-900/30 to-blue-900/30 rounded-xl border border-white/10">
               <div className="flex flex-col items-center">
@@ -403,7 +383,6 @@ const Quests = ({
                   Daily Reset In:
                 </h3>
                 <div className="flex justify-center items-center space-x-4">
-                  {/* Hours */}
                   <div className="relative">
                     <CountdownCircleTimer
                       key={`hours-${Math.floor(resetTimeLeft / 1000)}`}
@@ -433,7 +412,6 @@ const Quests = ({
                     </CountdownCircleTimer>
                   </div>
 
-                  {/* Minutes */}
                   <div className="relative">
                     <CountdownCircleTimer
                       key={`minutes-${Math.floor(resetTimeLeft / 1000)}`}
@@ -462,7 +440,6 @@ const Quests = ({
                     </CountdownCircleTimer>
                   </div>
 
-                  {/* Seconds */}
                   <div className="relative">
                     <CountdownCircleTimer
                       key={`seconds-${Math.floor(resetTimeLeft / 1000)}`}
@@ -496,25 +473,23 @@ const Quests = ({
             </div>
           )}
 
-          {/* Quests list */}
           {questsByCategory[activeTab].length > 0 ? (
             <div className="grid gap-4">
-              {quests
-                .filter((q) => q.type === activeTab)
-                .map((quest) => (
-                  <QuestItem
-                    key={quest.id}
-                    quest={quest}
-                    userLevel={userLevel}
-                    activeTab={activeTab}
-                    startQuestHandler={startQuest}
-                    completeQuestHandler={completeQuest}
-                    setEditingQuest={setEditingQuest}
-                    applyPenaltyAndResetQuest={applyPenaltyAndResetQuest}
-                    setInfoMessage={setInfoMessage}
-                    addNotification={addNotification}
-                  />
-                ))}
+              {questsByCategory[activeTab].map((quest) => (
+                <QuestItem
+                  key={quest.id}
+                  quest={quest}
+                  db={supabase}
+                  userLevel={userLevel}
+                  activeTab={activeTab}
+                  startQuestHandler={startQuestHandler}
+                  completeQuestHandler={completeQuestHandler}
+                  setEditingQuest={setEditingQuest}
+                  applyPenaltyAndResetQuest={applyPenaltyAndResetQuest}
+                  setInfoMessage={setInfoMessage}
+                  addNotification={addNotification}
+                />
+              ))}
             </div>
           ) : (
             <div className="text-center py-10">
@@ -537,7 +512,6 @@ const Quests = ({
         </div>
       </div>
 
-      {/* Quest Modal */}
       {showQuestModal && (
         <Modals
           showQuestModal={showQuestModal}
@@ -554,10 +528,10 @@ const Quests = ({
                 type: questData.type,
                 deadline: questData.deadline,
                 repeatable: questData.repeatable,
-                required_level: questData.levelRequired,
+                required_level: questData.required_level,
                 xp: questData.xp,
                 coins: questData.coins,
-                is_24_hour: questData.is24Hour,
+                is_24_hour: questData.is_24_hour,
               };
 
               if (editingQuest) {

@@ -6,16 +6,15 @@ const QuestModal = ({ show, onClose, onConfirm, editingQuest = null }) => {
     description: "",
     difficulty: "easy",
     type: "daily",
-    is24Hour: false,
+    is_24_hour: false,
     deadline: "",
-    levelRequired: 1,
+    required_level: 1,
     coins: 0,
     xp: 0,
   });
   const [error, setError] = useState(null);
   const [retryCount, setRetryCount] = useState(0);
 
-  // Populate form when editingQuest changes (edit mode)
   useEffect(() => {
     if (editingQuest) {
       setForm({
@@ -23,11 +22,11 @@ const QuestModal = ({ show, onClose, onConfirm, editingQuest = null }) => {
         description: editingQuest.description || "",
         difficulty: editingQuest.difficulty || "easy",
         type: editingQuest.type || "daily",
-        is24Hour: !!editingQuest.is24Hour,
+        is_24_hour: !!editingQuest.is_24_hour,
         deadline: editingQuest.deadline
           ? new Date(editingQuest.deadline).toISOString().slice(0, 16)
           : "",
-        levelRequired: editingQuest.requiredLevel || 1,
+        required_level: editingQuest.required_level || 1,
         coins: editingQuest.coins || 0,
         xp: editingQuest.xp || 0,
       });
@@ -37,9 +36,9 @@ const QuestModal = ({ show, onClose, onConfirm, editingQuest = null }) => {
         description: "",
         difficulty: "easy",
         type: "daily",
-        is24Hour: false,
+        is_24_hour: false,
         deadline: "",
-        levelRequired: 1,
+        required_level: 1,
         coins: 0,
         xp: 0,
       });
@@ -50,7 +49,6 @@ const QuestModal = ({ show, onClose, onConfirm, editingQuest = null }) => {
 
   if (!show) return null;
 
-  // Handle input changes (controlled form)
   const onChange = (e) => {
     const { name, value, type, checked } = e.target;
     setForm((f) => ({
@@ -59,11 +57,9 @@ const QuestModal = ({ show, onClose, onConfirm, editingQuest = null }) => {
     }));
   };
 
-  // Handle form submit with retry logic
   const handleSubmit = (e) => {
     e.preventDefault();
 
-    // Validation
     if (!form.name.trim()) {
       setError("نام کوئست الزامی است");
       return;
@@ -82,20 +78,17 @@ const QuestModal = ({ show, onClose, onConfirm, editingQuest = null }) => {
       ? new Date(form.deadline).toISOString()
       : null;
 
-    // Prepare quest data for confirm
     const questToSend = {
       ...form,
       name: form.name.trim(),
       description: form.description.trim(),
-      levelRequired: Number(form.levelRequired) || 1,
+      required_level: Number(form.required_level) || 1,
       coins: Number(form.coins) || 0,
       xp: Number(form.xp) || 0,
       deadline: formattedDeadline,
-      // If is24Hour checked, make quest repeatable by design
-      repeatable: form.is24Hour ? true : false,
+      repeatable: form.is_24_hour ? true : false,
     };
 
-    // Retry logic
     const attemptAddQuest = (attempt = 0) => {
       onConfirm(questToSend)
         .then(() => {
@@ -170,8 +163,7 @@ const QuestModal = ({ show, onClose, onConfirm, editingQuest = null }) => {
             <option value="subquest">ساب‌کوئست</option>
           </select>
 
-          {/* Show deadline input only if NOT daily or is24Hour is unchecked */}
-          {form.type === "daily" && !form.is24Hour && (
+          {form.type === "daily" && !form.is_24_hour && (
             <input
               type="datetime-local"
               name="deadline"
@@ -184,15 +176,15 @@ const QuestModal = ({ show, onClose, onConfirm, editingQuest = null }) => {
 
           <div className="flex items-center mb-3">
             <input
-              name="is24Hour"
+              name="is_24_hour"
               type="checkbox"
-              checked={form.is24Hour}
+              checked={form.is_24_hour}
               onChange={onChange}
               className="mr-2"
-              id="is24Hour"
+              id="is_24_hour"
             />
             <label
-              htmlFor="is24Hour"
+              htmlFor="is_24_hour"
               className="text-white select-none cursor-pointer"
             >
               24 ساعته
@@ -200,10 +192,10 @@ const QuestModal = ({ show, onClose, onConfirm, editingQuest = null }) => {
           </div>
 
           <input
-            name="levelRequired"
+            name="required_level"
             type="number"
             min={1}
-            value={form.levelRequired}
+            value={form.required_level}
             onChange={onChange}
             placeholder="حداقل سطح برای شروع"
             className="w-full bg-transparent border border-gray-600 p-2 rounded mb-3 text-right"
