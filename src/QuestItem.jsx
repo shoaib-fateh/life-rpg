@@ -16,8 +16,6 @@ const QuestItem = ({
 }) => {
   const requiredLevel = quest.levelRequired || 1;
   const canStart = userLevel >= requiredLevel;
-  console.log("userLevel", userLevel);
-  console.log("requiredLevel", requiredLevel);
   
   const isStarted = quest.status === "in_progress";
   const isCompleted = quest.status === "completed";

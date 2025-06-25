@@ -8,7 +8,8 @@ import QuestItem from "./QuestItem";
 import CountdownTimer from "./CountdownTimer";
 
 const supabaseUrl = "https://dycmmpjydiilovfvqxog.supabase.co";
-const supabaseKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR5Y21tcGp5ZGlpbG92ZnZxeG9nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTA3NzcyMzAsImV4cCI6MjA2NjM1MzIzMH0.SYXqbiZbWCI-CihtGO3jIWO0riYOC_tEiFV2EYw_lmE";
+const supabaseKey =
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR5Y21tcGp5ZGlpbG92ZnZxeG9nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTA3NzcyMzAsImV4cCI6MjA2NjM1MzIzMH0.SYXqbiZbWCI-CihtGO3jIWO0riYOC_tEiFV2EYw_lmE";
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 // --- InfoPopup Component ---
@@ -546,33 +547,50 @@ const Quests = ({
             if (!questData.name) return;
 
             try {
+              const dbFormat = {
+                name: questData.name,
+                description: questData.description,
+                difficulty: questData.difficulty,
+                type: questData.type,
+                deadline: questData.deadline,
+                repeatable: questData.repeatable,
+                required_level: questData.levelRequired,
+                xp: questData.xp,
+                coins: questData.coins,
+                is_24_hour: questData.is24Hour,
+              };
+
               if (editingQuest) {
                 const { error } = await supabase
                   .from("quests")
-                  .update(questData)
+                  .update(dbFormat)
                   .eq("id", editingQuest.id);
                 if (error) throw error;
+
                 setQuests((prev) =>
                   prev.map((q) =>
-                    q.id === editingQuest.id ? { ...q, ...questData } : q
+                    q.id === editingQuest.id ? { ...q, ...dbFormat } : q
                   )
                 );
               } else {
                 const newQuest = {
-                  ...questData,
+                  ...dbFormat,
                   id: Date.now().toString(),
                   status: "not_started",
                   subquests: [],
                   priority:
                     quests.reduce((max, q) => Math.max(max, q.priority), 0) + 1,
+                  dependencies: [],
                   warning_sent_for_current_period: false,
                 };
+
                 const { error } = await supabase
                   .from("quests")
                   .insert(newQuest);
                 if (error) throw error;
                 setQuests((prev) => [...prev, newQuest]);
               }
+
               setShowQuestModal(false);
               setEditingQuest(null);
             } catch (err) {

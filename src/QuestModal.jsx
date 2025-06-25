@@ -27,12 +27,10 @@ const QuestModal = ({ show, onClose, onConfirm, editingQuest = null }) => {
         deadline: editingQuest.deadline
           ? new Date(editingQuest.deadline).toISOString().slice(0, 16)
           : "",
-        levelRequired: editingQuest.levelRequired || 1,
+        levelRequired: editingQuest.requiredLevel || 1,
         coins: editingQuest.coins || 0,
         xp: editingQuest.xp || 0,
       });
-      setError(null);
-      setRetryCount(0);
     } else {
       setForm({
         name: "",
@@ -45,9 +43,9 @@ const QuestModal = ({ show, onClose, onConfirm, editingQuest = null }) => {
         coins: 0,
         xp: 0,
       });
-      setError(null);
-      setRetryCount(0);
     }
+    setError(null);
+    setRetryCount(0);
   }, [editingQuest, show]);
 
   if (!show) return null;
@@ -80,6 +78,10 @@ const QuestModal = ({ show, onClose, onConfirm, editingQuest = null }) => {
     }
     setError(null);
 
+    const formattedDeadline = form.deadline
+      ? new Date(form.deadline).toISOString()
+      : null;
+
     // Prepare quest data for confirm
     const questToSend = {
       ...form,
@@ -88,10 +90,7 @@ const QuestModal = ({ show, onClose, onConfirm, editingQuest = null }) => {
       levelRequired: Number(form.levelRequired) || 1,
       coins: Number(form.coins) || 0,
       xp: Number(form.xp) || 0,
-      deadline:
-        form.deadline && form.type !== "daily" && !form.is24Hour
-          ? new Date(form.deadline).getTime()
-          : null,
+      deadline: formattedDeadline,
       // If is24Hour checked, make quest repeatable by design
       repeatable: form.is24Hour ? true : false,
     };

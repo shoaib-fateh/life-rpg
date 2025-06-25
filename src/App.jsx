@@ -3,42 +3,62 @@ import { createClient } from "@supabase/supabase-js";
 import Header from "./Header";
 import Quests from "./Quests";
 import Charts from "./Charts";
-import Modals from "./Modals";
 import Journal from "./Journal";
 import { initParticlesEngine } from "@tsparticles/react";
 import { loadSlim } from "@tsparticles/slim";
 import { motion, AnimatePresence } from "framer-motion";
-import LoadingComponent from "./LoadingComponent";
+import LoadingComponent from "./components/LoadingComponent";
 import { ErrorBoundary } from "react-error-boundary";
+import { usePlayerState } from "./hooks/usePlayerState";
+import PenaltyModal from "./components/modals/PenaltyModal";
+import LevelUpModal from "./components/modals/LevelUpModal";
+import TabNavigation from "./tabs/TabNavigation";
+import NotificationPanel from "./tabs/NotificationPanel";
+import AchievementsPanel from "./tabs/AchievementsPanel";
+import { applyItemEffect } from "./logic/InventoryLogic";
+import { canStartQuest } from "./logic/QuestLogic";
+import ParticlesBackground from "./components/particlesBackground";
 
 const Particles = lazy(() => import("@tsparticles/react"));
 
 const supabaseUrl = "https://dycmmpjydiilovfvqxog.supabase.co";
 const supabaseKey =
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR5Y21tcGp5ZGlpbG92ZnZxeG9nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTA3NzcyMzAsImV4cCI6MjA2NjM1MzIzMH0.SYXqbiZbWCI-CihtGO3jIWO0riYOC_tEiFV2EYw_lmE";
-
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 const App = () => {
-  // Player state
-  const [level, setLevel] = useState(1);
-  const [xp, setXp] = useState(0);
-  const [maxXP, setMaxXP] = useState(980);
-  const [coins, setCoins] = useState(0);
-  const [hp, setHp] = useState(100);
-  const [maxHp, setMaxHp] = useState(100);
-  const [mana, setMana] = useState(120);
-  const [maxMana, setMaxMana] = useState(120);
-  const [badges, setBadges] = useState([]);
+  const {
+    level,
+    setLevel,
+    xp,
+    setXp,
+    maxXP,
+    setMaxXP,
+    coins,
+    setCoins,
+    hp,
+    setHp,
+    maxHp,
+    setMaxHp,
+    mana,
+    setMana,
+    maxMana,
+    setMaxMana,
+    badges,
+    setBadges,
+    penaltyCount,
+    setPenaltyCount,
+    penaltyCoins,
+    setPenaltyCoins,
+    isPenaltyActive,
+    setIsPenaltyActive,
+    currentPenalty,
+    setCurrentPenalty,
+  } = usePlayerState();
+
   const [showLevelUp, setShowLevelUp] = useState(false);
   const [newLevel, setNewLevel] = useState(0);
-  const [penaltyCount, setPenaltyCount] = useState(0);
-  const [penaltyCoins, setPenaltyCoins] = useState(0);
-  const [isPenaltyActive, setIsPenaltyActive] = useState(false);
-  const [currentPenalty, setCurrentPenalty] = useState(null);
   const [showPenaltyModal, setShowPenaltyModal] = useState(false);
-
-  // Gameplay state
   const [quests, setQuests] = useState([]);
   const [currentQuestType, setCurrentQuestType] = useState("daily");
   const [currentSubquestParentId, setCurrentSubquestParentId] = useState(null);
@@ -48,7 +68,7 @@ const App = () => {
   const [showInventoryModal, setShowInventoryModal] = useState(false);
   const [inventory, setInventory] = useState({});
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState("Quests");
+  const [activeTab, setActiveTab] = useState("quests");
   const [notifications, setNotifications] = useState([]);
   const [unreadNotifications, setUnreadNotifications] = useState(0);
   const [achievements, setAchievements] = useState([]);
@@ -119,18 +139,24 @@ const App = () => {
 
         setQuests(
           questsData.map((q) => ({
-            ...q,
+            id: q.id,
+            name: q.name,
+            description: q.description,
+            difficulty: q.difficulty,
+            type: q.type,
             status: q.status || "not_started",
-            dependencies: q.dependencies || [],
-            deadline: q.deadline || null,
             subquests: q.subquests || [],
+            priority: q.priority,
+            deadline: q.deadline || null,
+            dependencies: q.dependencies || [],
             repeatable: !!q.repeatable,
-            is24Hour: !!q.is_24_hour,
             requiredLevel: q.required_level || 1,
             coins: q.coins || 0,
             xp: q.xp || 0,
             warningSentForCurrentPeriod:
               q.warning_sent_for_current_period || false,
+            is24Hour: !!q.is_24_hour,
+            completion_timestamp: q.completion_timestamp,
           }))
         );
 
@@ -360,7 +386,7 @@ const App = () => {
         "achievement"
       );
 
-      // اعمال پاداش‌ها به صورت جداگانه
+      // Apply rewards separately
       if (achievement.id === "rising_star") {
         setCoins((prev) => prev + 200);
         setXp((prev) => prev + 100);
@@ -408,7 +434,7 @@ const App = () => {
         description: "Reached Level 5",
         type: "positive",
         icon: "⭐",
-        rewardValue: 0, // پاداش‌ها جداگانه اعمال می‌شن
+        rewardValue: 0,
       });
     }
 
@@ -422,7 +448,7 @@ const App = () => {
         description: "Reached Level 10",
         type: "positive",
         icon: "🏆",
-        rewardValue: 0.1, // 10% افزایش برای maxHp و maxMana
+        rewardValue: 0.1,
       });
     }
 
@@ -440,7 +466,7 @@ const App = () => {
         description: "Completed 3 daily quests in a row",
         type: "positive",
         icon: "🔥",
-        rewardValue: 0.05, // 5% افزایش برای maxHp
+        rewardValue: 0.05,
       });
     }
 
@@ -451,7 +477,7 @@ const App = () => {
         description: "Completed 7 daily quests in a row",
         type: "positive",
         icon: "💪",
-        rewardValue: 0.1, // 10% افزایش برای maxHp و maxMana
+        rewardValue: 0.1,
       });
     }
 
@@ -466,7 +492,7 @@ const App = () => {
         description: "Received your first penalty",
         type: "negative",
         icon: "⚠️",
-        rewardValue: -0.02, // 2% کاهش برای maxHp و maxMana
+        rewardValue: -0.02,
       });
     }
 
@@ -478,7 +504,7 @@ const App = () => {
         description: "Bought your first item from the shop",
         type: "positive",
         icon: "🛒",
-        rewardValue: 0, // پاداش جداگانه اعمال می‌شه
+        rewardValue: 0,
       });
     }
 
@@ -496,7 +522,7 @@ const App = () => {
         description: "Completed your first main quest",
         type: "positive",
         icon: "⚔️",
-        rewardValue: 0, // پاداش جداگانه اعمال می‌شه
+        rewardValue: 0,
       });
     }
   };
@@ -516,7 +542,6 @@ const App = () => {
   const addBadge = (badge, duration = 5000) => {
     const newBadges = [...badges, badge];
     setBadges(newBadges);
-
     setTimeout(() => {
       setBadges((prev) => prev.filter((b) => b !== badge));
     }, duration);
@@ -535,7 +560,7 @@ const App = () => {
   });
 
   const tabNames = {
-    notification: `Notification${
+    notification: `Notifications${
       unreadNotifications > 0 ? ` (${unreadNotifications})` : ""
     }`,
     quests: "Quests",
@@ -548,23 +573,10 @@ const App = () => {
     }
   }, [level, quests, inventory, notifications, loading]);
 
-  const canStartQuest = (quest) => {
-    if (hp <= 0 || mana <= 0) return false;
-    if (isPenaltyActive && quest.type === "daily" && quest.repeatable)
-      return false;
-    if (!quest.dependencies || quest.dependencies.length === 0) return true;
-    if (quest.requiredLevel && level < quest.requiredLevel) return false;
-
-    return quest.dependencies.every((depId) => {
-      const depQuest = quests.find((q) => q.id === depId);
-      return depQuest && depQuest.status === "completed";
-    });
-  };
-
   const startQuest = async (id) => {
     const quest = quests.find((q) => q.id === id);
     if (!quest || quest.status !== "not_started") return;
-    if (!canStartQuest(quest)) return;
+    if (!canStartQuest(quest, level, quests, hp, mana, isPenaltyActive)) return;
 
     let newDeadline = quest.deadline;
 
@@ -583,11 +595,44 @@ const App = () => {
     addNotification(`Quest started: "${quest.name}"`, "quest");
   };
 
+  const toDbQuest = (quest) => {
+    return {
+      id: quest.id,
+      name: quest.name,
+      description: quest.description,
+      difficulty: quest.difficulty,
+      type: quest.type,
+      status: quest.status,
+      subquests: quest.subquests,
+      priority: quest.priority,
+      deadline: quest.deadline,
+      dependencies: quest.dependencies,
+      repeatable: quest.repeatable,
+      required_level: quest.requiredLevel,
+      coins: quest.coins,
+      xp: quest.xp,
+      completion_timestamp: quest.completion_timestamp,
+      warning_sent_for_current_period: quest.warningSentForCurrentPeriod,
+      is_24_hour: quest.is24Hour,
+    };
+  };
+
+  useEffect(() => {
+    if (loading) return;
+    const dbQuests = quests.map(toDbQuest);
+    supabase
+      .from("quests")
+      .upsert(dbQuests)
+      .then(({ error }) => {
+        if (error) console.error("Error updating quests:", error);
+      });
+  }, [quests, loading]);
+
   const completeQuest = async (id) => {
     const quest = quests.find((q) => q.id === id);
     if (!quest) return;
     if (quest.status === "completed" || quest.status === "failed") return;
-    if (!canStartQuest(quest)) return;
+    if (!canStartQuest(quest, level, quests, hp, mana, isPenaltyActive)) return;
 
     let hpCost =
       quest.type === "main" ? 20 : quest.type === "challenge" ? 30 : 5;
@@ -751,16 +796,7 @@ const App = () => {
       return;
     }
 
-    if (item.name === "HP Potion") {
-      setHp((prev) => Math.min(prev + 50, maxHp));
-      addBadge("HP+", 3000);
-    } else if (item.name === "Mana Potion") {
-      setMana((prev) => Math.min(prev + 50, maxMana));
-      addBadge("MA+", 3000);
-    } else if (item.name === "1-Hour Break") {
-      setHp((prev) => Math.min(prev + 20, maxHp));
-      addBadge("REST", 5000);
-    }
+    applyItemEffect(item, setHp, maxHp, setMana, maxMana, addBadge);
 
     const newCount = item.count - 1;
     if (newCount <= 0) {
@@ -888,8 +924,10 @@ const App = () => {
         .from("penalties")
         .select("*")
         .gt("end_time", now);
-      setIsPenaltyActive(activePenalties.length > 0);
-      if (activePenalties.length > 0) {
+      setIsPenaltyActive(
+        Array.isArray(activePenalties) && activePenalties.length > 0
+      );
+      if (Array.isArray(activePenalties) && activePenalties.length > 0) {
         setCurrentPenalty(activePenalties[0]);
         setShowPenaltyModal(true);
       } else {
@@ -905,80 +943,15 @@ const App = () => {
     switch (activeTab) {
       case "notification":
         return (
-          <div className="p-4 animate-fade-in">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold text-purple-400 drop-shadow-glow">
-                Notifications
-              </h2>
-              {unreadNotifications > 0 && (
-                <button
-                  onClick={markAllNotificationsAsRead}
-                  className="text-sm bg-purple-700 px-3 py-1 rounded hover:bg-purple-600 transition"
-                >
-                  Mark all as read
-                </button>
-              )}
-            </div>
-
-            {notifications.length === 0 ? (
-              <div className="text-center py-10 text-gray-400">
-                No notifications yet
-              </div>
-            ) : (
-              <div className="space-y-3 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
-                {[...notifications].reverse().map((notification) => (
-                  <div
-                    key={notification.id}
-                    className={`p-4 rounded-lg border ${
-                      notification.read
-                        ? "bg-gray-800 border-gray-700"
-                        : "bg-gray-900 border-purple-500"
-                    } backdrop-blur-md`}
-                  >
-                    <div className="flex justify-between">
-                      <div className="flex items-start">
-                        {notification.type === "level" && (
-                          <span className="mr-2 text-yellow-400">🌟</span>
-                        )}
-                        {notification.type === "achievement" && (
-                          <span className="mr-2 text-green-400">🏆</span>
-                        )}
-                        {notification.type === "penalty" && (
-                          <span className="mr-2 text-red-400">⚠️</span>
-                        )}
-                        {notification.type === "warning" && (
-                          <span className="mr-2 text-yellow-400">⚠️</span>
-                        )}
-                        <div>
-                          <p
-                            className={
-                              notification.read ? "text-gray-300" : "text-white"
-                            }
-                          >
-                            {notification.message}
-                          </p>
-                          <p className="text-xs text-gray-500 mt-1">
-                            {new Date(notification.timestamp).toLocaleString()}
-                          </p>
-                        </div>
-                      </div>
-                      {!notification.read && (
-                        <button
-                          onClick={() =>
-                            markNotificationAsRead(notification.id)
-                          }
-                          className="text-gray-400 hover:text-white text-sm"
-                        >
-                          Mark read
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+          <NotificationPanel
+            notifications={notifications}
+            unreadNotifications={unreadNotifications}
+            markNotificationAsRead={markNotificationAsRead}
+            markAllNotificationsAsRead={markAllNotificationsAsRead}
+          />
         );
+      case "achievements":
+        return <AchievementsPanel achievements={achievements} />;
       case "quests":
         return (
           <Quests
@@ -990,52 +963,11 @@ const App = () => {
             completeSubquest={completeSubquest}
             startQuest={startQuest}
             userLevel={level}
-            canStartQuest={canStartQuest}
+            canStartQuest={(quest) =>
+              canStartQuest(quest, level, quests, hp, mana, isPenaltyActive)
+            }
             addNotification={addNotification}
           />
-        );
-      case "achievements":
-        return (
-          <div className="p-4 animate-fade-in">
-            <h2 className="text-xl font-bold text-purple-400 mb-4 drop-shadow-glow">
-              Achievements
-            </h2>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {achievements.length === 0 ? (
-                <div className="col-span-2 text-center py-10 text-gray-400">
-                  No achievements earned yet
-                </div>
-              ) : (
-                achievements.map((achievement) => (
-                  <div
-                    key={achievement.id}
-                    className={`p-4 rounded-lg border ${
-                      achievement.type === "positive"
-                        ? "border-green-500 bg-green-900/20"
-                        : "border-red-500 bg-red-900/20"
-                    } backdrop-blur-md`}
-                  >
-                    <div className="flex items-start">
-                      <span className="text-2xl mr-3">{achievement.icon}</span>
-                      <div>
-                        <h3 className="font-bold text-lg">
-                          {achievement.name}
-                        </h3>
-                        <p className="text-gray-300">
-                          {achievement.description}
-                        </p>
-                        <p className="text-xs text-gray-500 mt-2">
-                          Earned on:{" "}
-                          {new Date(achievement.timestamp).toLocaleDateString()}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
         );
       default:
         return null;
@@ -1046,76 +978,20 @@ const App = () => {
 
   return (
     <div className="relative min-h-screen bg-gray-900 text-white font-sans overflow-hidden">
-      {particlesLoaded && (
-        <Suspense fallback={null}>
-          <Particles
-            id="particles-js"
-            className="absolute inset-0 z-0"
-            options={{
-              particles: {
-                number: {
-                  value: 80,
-                  density: { enable: true, value_area: 800 },
-                },
-                color: { value: "#5a5af0" },
-                shape: { type: "circle" },
-                opacity: { value: 0.5, random: true },
-                size: { value: 3, random: true },
-                line_linked: {
-                  enable: true,
-                  distance: 150,
-                  color: "#5a5af0",
-                  opacity: 0.4,
-                  width: 1,
-                },
-                move: {
-                  enable: true,
-                  speed: 6,
-                  direction: "none",
-                  random: false,
-                  straight: false,
-                  out_mode: "out",
-                  bounce: false,
-                },
-              },
-              interactivity: {
-                detect_on: "canvas",
-                events: {
-                  onhover: { enable: true, mode: "repulse" },
-                  onclick: { enable: true, mode: "push" },
-                  resize: true,
-                },
-                modes: {
-                  repulse: { distance: 200, duration: 0.4 },
-                  push: { particles_nb: 4 },
-                },
-              },
-              retina_detect: true,
-            }}
-          />
-        </Suspense>
-      )}
+      {particlesLoaded && <ParticlesBackground />}
       <div className="container mx-auto p-4 max-w-2xl relative z-10">
         {loading ? (
           <LoadingComponent />
         ) : (
           <>
-            {showLevelUp && (
-              <div className="fixed inset-0 flex items-center justify-center z-50">
-                <div className="absolute inset-0 bg-black bg-opacity-70 backdrop-blur-md"></div>
-                <div className="relative bg-gradient-to-r from-purple-600/30 to-blue-500/30 border border-white/20 rounded-xl p-8 shadow-2xl max-w-md w-full text-center backdrop-blur-xl animate-pop-in">
-                  <div className="text-6xl mb-4 animate-bounce">🎉</div>
-                  <h2 className="text-3xl font-bold text-white mb-2">
-                    LEVEL UP!
-                  </h2>
-                  <p className="text-5xl font-bold text-yellow-400 mb-6">
-                    {newLevel}
-                  </p>
-                  <p className="text-purple-200">
-                    You've grown stronger! Max HP and Mana increased.
-                  </p>
-                </div>
-              </div>
+            {showLevelUp && <LevelUpModal level={newLevel} />}
+            {showPenaltyModal && currentPenalty && (
+              <PenaltyModal
+                currentPenalty={currentPenalty}
+                onClose={() => setShowPenaltyModal(false)}
+                completeTask={completePenaltyTask}
+                updateApology={updateApology}
+              />
             )}
             <Header
               level={level}
@@ -1132,21 +1008,12 @@ const App = () => {
               isPenaltyActive={isPenaltyActive}
               showPenaltyDetails={() => setShowPenaltyModal(true)}
             />
-            {Object.entries(tabNames).map(([key, name]) => (
-              <button
-                key={key}
-                onClick={() => setActiveTab(key)}
-                className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${
-                  activeTab === key
-                    ? "bg-gray-700 text-white"
-                    : "text-gray-400 hover:text-gray-200"
-                }`}
-              >
-                {name}
-              </button>
-            ))}
+            <TabNavigation
+              tabNames={tabNames}
+              activeTab={activeTab}
+              setActiveTab={setActiveTab}
+            />
             <div className="px-2 py-4">{renderTabContent()}</div>
-
             <ErrorBoundary FallbackComponent={ChartErrorFallback}>
               <Charts
                 xp={xp}
@@ -1158,97 +1025,7 @@ const App = () => {
                 completedQuests={quests.filter((q) => q.status === "completed")}
               />
             </ErrorBoundary>
-
             <Journal />
-
-            <Modals
-              showQuestModal={showQuestModal}
-              setShowQuestModal={setShowQuestModal}
-              currentQuestType={currentQuestType}
-              onQuestConfirm={handleQuestConfirm}
-              showSubquestModal={showSubquestModal}
-              setShowSubquestModal={setShowSubquestModal}
-              onSubquestConfirm={handleSubquestConfirm}
-              showShopModal={showShopModal}
-              setShowShopModal={setShowShopModal}
-              shopItems={shopItems}
-              coins={coins}
-              onBuy={buyItem}
-              showInventoryModal={showInventoryModal}
-              setShowInventoryModal={setShowInventoryModal}
-              inventory={inventory}
-              applyItem={applyItem}
-              quests={quests}
-            />
-            {showPenaltyModal && currentPenalty && (
-              <div className="fixed inset-0 flex items-center justify-center z-50">
-                <div
-                  className="absolute inset-0 bg-black bg-opacity-70 backdrop-blur-md"
-                  onClick={() => setShowPenaltyModal(false)}
-                ></div>
-                <div className="relative bg-gray-800 bg-opacity-50 rounded-lg p-6 max-w-md w-full backdrop-blur-xl border border-white/10">
-                  <h2 className="text-2xl font-bold text-red-400 mb-4 drop-shadow-glow">
-                    Penalty Details
-                  </h2>
-                  <p className="text-gray-300 mb-4">
-                    You have been penalized for not completing your Every Day
-                    Quests on time.
-                  </p>
-                  <p className="text-gray-300 mb-4">
-                    Penalties applied:
-                    <ul className="list-disc ml-5">
-                      <li>HP and Mana reduced by 80%</li>
-                      <li>20% of coins deducted</li>
-                      <li>Experience gain reduced by 20%</li>
-                      <li>Store prices increased</li>
-                    </ul>
-                  </p>
-                  <p className="text-gray-300 mb-4">
-                    Penalty ends on:{" "}
-                    {new Date(currentPenalty.end_time).toLocaleString()}
-                  </p>
-                  <p className="text-gray-300 mb-4">
-                    Additional tasks:
-                    <ul className="list-disc ml-5">
-                      {currentPenalty.tasks.map((task, index) => (
-                        <li key={index}>
-                          {task.name} -{" "}
-                          {task.completed ? "Completed" : "Pending"}
-                          {!task.completed && (
-                            <button
-                              onClick={() =>
-                                completePenaltyTask(currentPenalty.id, index)
-                              }
-                              className="ml-2 text-sm bg-green-500 px-2 py-1 rounded"
-                            >
-                              Complete
-                            </button>
-                          )}
-                        </li>
-                      ))}
-                    </ul>
-                  </p>
-                  <div className="mb-4">
-                    <label className="block text-gray-300 mb-2">
-                      Apology/Reason:
-                    </label>
-                    <textarea
-                      className="w-full p-2 bg-gray-700 rounded"
-                      value={currentPenalty.apology || ""}
-                      onChange={(e) =>
-                        updateApology(currentPenalty.id, e.target.value)
-                      }
-                    />
-                  </div>
-                  <button
-                    onClick={() => setShowPenaltyModal(false)}
-                    className="bg-red-500 px-4 py-2 rounded hover:bg-red-400 transition"
-                  >
-                    Close
-                  </button>
-                </div>
-              </div>
-            )}
           </>
         )}
       </div>
