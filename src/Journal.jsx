@@ -152,7 +152,7 @@ const Journal = () => {
         </div>
       </div>
 
-      <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+      <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar overflow-hidden">
         <AnimatePresence>
           {entries.length === 0 ? (
             <motion.div

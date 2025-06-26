@@ -175,7 +175,7 @@ const NotificationPanel = ({
       )} */}
 
       {/* Notification Singularity */}
-      <div className="relative max-h-[400px] overflow-x-auto">
+      <div className="relative max-h-[400px] overflow-x-auto custom-scrollbar">
         {notifications.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center relative">
             <motion.div
