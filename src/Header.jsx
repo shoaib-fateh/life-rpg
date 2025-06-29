@@ -101,7 +101,7 @@ const Header = ({
               transition={{ type: "spring", stiffness: 300 }}
             >
               <motion.h1
-                className="text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 via-blue-400 to-purple-400 drop-shadow-glow tracking-tight"
+                className="text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 via-blue-400 to-purple-400 drop-shadow-glow tracking-tight uppercase"
                 animate={{
                   backgroundPosition: ["0% 50%", "100% 50%", "0% 50%"],
                   textShadow: [
@@ -113,7 +113,7 @@ const Header = ({
                 transition={{ duration: 4, repeat: Infinity }}
                 style={{ willChange: "background-position, text-shadow" }}
               >
-                VOID
+                j-kuu
               </motion.h1>
               <motion.span
                 className="text-xs px-2 py-1 bg-gradient-to-br from-purple-600/80 to-blue-600/80 rounded-full text-white font-bold border border-white/10 shadow-glow"

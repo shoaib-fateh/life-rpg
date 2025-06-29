@@ -18,6 +18,8 @@ import AchievementsPanel from "./tabs/AchievementsPanel";
 import { applyItemEffect } from "./logic/InventoryLogic";
 import { canStartQuest } from "./logic/QuestLogic";
 import ParticlesBackground from "./components/particlesBackground";
+import FloatingButtons from "./FloatingButtons";
+import WorkoutPlan from "./WorkoutPlan";
 
 const Particles = lazy(() => import("@tsparticles/react"));
 
@@ -25,6 +27,7 @@ const supabaseUrl = "https://dycmmpjydiilovfvqxog.supabase.co";
 const supabaseKey =
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR5Y21tcGp5ZGlpbG92ZnZxeG9nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTA3NzcyMzAsImV4cCI6MjA2NjM1MzIzMH0.SYXqbiZbWCI-CihtGO3jIWO0riYOC_tEiFV2EYw_lmE";
 const supabase = createClient(supabaseUrl, supabaseKey);
+export { supabase };
 
 const App = () => {
   const {
@@ -73,6 +76,7 @@ const App = () => {
   const [unreadNotifications, setUnreadNotifications] = useState(0);
   const [achievements, setAchievements] = useState([]);
   const [particlesLoaded, setParticlesLoaded] = useState(false);
+  const [activeButton, setActiveButton] = useState("home");
 
   const questsRef = useRef([]);
 
@@ -982,39 +986,75 @@ const App = () => {
                 updateApology={updateApology}
               />
             )}
-            <Header
-              level={level}
-              coins={coins}
-              hp={hp}
-              maxHp={maxHp}
-              mana={mana}
-              maxMana={maxMana}
-              xp={xp}
-              maxXP={maxXP}
-              setShowInventoryModal={setShowInventoryModal}
-              setShowShopModal={setShowShopModal}
-              badges={badges}
-              isPenaltyActive={isPenaltyActive}
-              showPenaltyDetails={() => setShowPenaltyModal(true)}
-            />
-            <ErrorBoundary FallbackComponent={ChartErrorFallback}>
-              <Charts
-                xp={xp}
-                maxXP={maxXP}
+            <div className="relative w-full max-w-2xl mx-auto p-4">
+              <Header
+                level={level}
+                coins={coins}
                 hp={hp}
                 maxHp={maxHp}
                 mana={mana}
                 maxMana={maxMana}
-                completedQuests={quests.filter((q) => q.status === "completed")}
+                xp={xp}
+                maxXP={maxXP}
+                setShowInventoryModal={setShowInventoryModal}
+                setShowShopModal={setShowShopModal}
+                badges={badges}
+                isPenaltyActive={isPenaltyActive}
+                showPenaltyDetails={() => setShowPenaltyModal(true)}
               />
-            </ErrorBoundary>
-            <TabNavigation
-              tabNames={tabNames}
-              activeTab={activeTab}
-              setActiveTab={setActiveTab}
-            />
-            <div className="px-2 py-4">{renderTabContent()}</div>
-            <Journal />
+
+              <FloatingButtons
+                setActiveButton={setActiveButton}
+                activeButton={activeButton}
+              />
+            </div>
+
+            {activeButton === "home" && (
+              <>
+                <ErrorBoundary FallbackComponent={ChartErrorFallback}>
+                  <Charts
+                    xp={xp}
+                    maxXP={maxXP}
+                    hp={hp}
+                    maxHp={maxHp}
+                    mana={mana}
+                    maxMana={maxMana}
+                    completedQuests={quests.filter(
+                      (q) => q.status === "completed"
+                    )}
+                  />
+                </ErrorBoundary>
+                <TabNavigation
+                  tabNames={tabNames}
+                  activeTab={activeTab}
+                  setActiveTab={setActiveTab}
+                />
+                <div className="px-2 py-4">{renderTabContent()}</div>
+                <Journal />
+              </>
+            )}
+
+            {activeButton === "workout" && (
+              <>
+                <WorkoutPlan
+                  xp={xp}
+                  setXp={setXp}
+                  hp={hp}
+                  setHp={setHp}
+                  maxHp={maxHp}
+                  mana={mana}
+                  setMana={setMana}
+                  maxMana={maxMana}
+                  addNotification={addNotification}
+                  badges={badges}
+                  setBadges={setBadges}
+                />
+              </>
+            )}
+
+            {activeButton === "nutrition" && (
+              <div>Nutrition content coming soon...</div>
+            )}
           </>
         )}
       </div>
